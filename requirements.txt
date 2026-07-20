@@ -1,0 +1,6 @@
+pefile>=2024.8.26      # parseo de PE (Windows)
+yara-python>=4.5       # reglas YARA
+lief>=0.14             # parseo de ELF / Mach-O
+ppdeep>=20200505       # hash difuso (ssdeep en Python puro, agrupa familias)
+python-magic>=0.4.27   # identificación de tipo de fichero (libmagic)
+requests>=2.31         # conector de sandbox dinámico (CAPE / tria.ge)
