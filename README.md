@@ -18,7 +18,7 @@ un **sandbox aislado** y normaliza su informe de comportamiento.
 - **Capacidades → MITRE ATT&CK**: traduce imports y cadenas a capacidades (inyección, persistencia, keylogging, anti-debug, anti-VM, descarga, cifrado/ransomware, robo de credenciales…), cada una con su técnica y evidencia — el enfoque de la herramienta `capa`.
 - **YARA**: escaneo con reglas propias (ampliables).
 - **IOCs**: URLs, IPs, dominios, hashes, claves de registro, rutas, correos.
-- **Puntuación 0-100** con veredicto (benigno / sospechoso / probable / malicioso) y razones ponderadas.
+- **Puntuación 0-100** con veredicto (benigno / sospechoso / probable / malicioso).
 
 **Dinámico (en sandbox aislado):**
 - Conector para **CAPEv2** (self-hosted) o **tria.ge** (API cloud): envía la muestra, espera el informe y normaliza procesos, red, comportamientos ATT&CK y firmas.
