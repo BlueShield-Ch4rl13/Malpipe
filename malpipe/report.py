@@ -65,14 +65,18 @@ def write_html(out_dir: Path, result: dict) -> Path:
     imports_html = ""
     if pe.get("imports"):
         flat = sorted({f for v in pe["imports"].values() for f in v})[:60]
-        imports_html = (f'<h3>Imports destacados ({pe.get("import_count",0)} en total)</h3>'
-                        f'<div class="chips">' + "".join(f'<span class="chip mono">{_esc(f)}</span>' for f in flat) + '</div>')
+        chips = "".join(f'<span class="chip mono">{_esc(f)}</span>' for f in flat)
+        imports_html = (
+            f'<h3>Imports destacados ({pe.get("import_count", 0)} en total)</h3>'
+            f'<div class="chips">{chips}</div>'
+        )
 
     anoms = pe.get("anomalies", [])
     anoms_html = ("<h3>Anomalías estructurales</h3><ul class='an'>" +
                   "".join(f"<li>{_esc(a)}</li>" for a in anoms) + "</ul>") if anoms else ""
 
-    dyn = result.get("dynamic")
+    dyn_json = _esc(json.dumps(dyn, ensure_ascii=False)[:400])
+    dyn_html = f'<h3>Análisis dinámico</h3><div class="muted">{dyn_json}</div>'
     dyn_html = ""
     if dyn:
         dyn_html = f'<h3>Análisis dinámico</h3><div class="muted">{_esc(json.dumps(dyn, ensure_ascii=False)[:400])}</div>'
