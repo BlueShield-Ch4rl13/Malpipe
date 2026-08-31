@@ -15,9 +15,6 @@ dependencies = [
     "requests>=2.31.0",
 ]
 
-[tool.ruff.lint.per-file-ignores]
-# report.py genera HTML/CSS embebido: partir esas cadenas empeora la legibilidad.
-"malpipe/report.py" = ["E501"]
 
 [project.optional-dependencies]
 full = ["yara-python>=4.5.0"]
@@ -43,3 +40,7 @@ ignore = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# report.py genera HTML/CSS/SVG embebido: partir esas cadenas empeora la legibilidad.
+"malpipe/report.py" = ["E501"]
