@@ -172,4 +172,4 @@ malpipe/
 
 ## Licencia
 
-MIT © 2026 CVL
+MIT
