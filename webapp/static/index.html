@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analiza malware · Carlos Villalba Lagos</title>
+  <meta name="description" content="Sube un fichero sospechoso y obtén un veredicto: malicioso, sospechoso o limpio.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav__inner">
+      <div class="brand">malpipe<span>.analyze</span></div>
+      <a class="nav__back" href="https://carlosvillalbalagos.com">← Volver al portfolio</a>
+    </div>
+  </nav>
+
+  <main class="wrap">
+
+    <!-- 1. Subida -->
+    <section id="view-upload">
+      <div class="hero">
+        <span class="eyebrow">// Análisis de malware</span>
+        <h1>¿Es peligroso este <span class="grad">fichero</span>?</h1>
+        <p>Súbelo y te decimos si es <b>malicioso</b>, <b>sospechoso</b> o <b>limpio</b>, con todo lo que hemos descubierto. No hace falta saber de seguridad.</p>
+      </div>
+
+      <div id="drop" class="drop" role="button" tabindex="0" aria-label="Elegir fichero">
+        <div class="drop__icon" aria-hidden="true">📄</div>
+        <p class="drop__main">Arrastra un fichero aquí o pulsa para elegirlo</p>
+        <p class="drop__sub">Ejecutables, documentos, PDF, ZIP… hasta <span id="max-mb">30</span> MB</p>
+        <p id="drop-file" class="drop__file"></p>
+      </div>
+      <input type="file" id="file-input">
+
+      <div id="turnstile"></div>
+
+      <button id="analyze-btn" class="btn" disabled>Analizar fichero</button>
+      <p id="upload-error" class="note hidden"></p>
+
+      <div class="note">
+        <span aria-hidden="true">🛡️</span>
+        <span>El fichero se analiza en un <b>sandbox aislado</b>, nunca se ejecuta en tu equipo, y <b>no se guarda</b> tras el análisis. No subas información personal ni confidencial.</span>
+      </div>
+    </section>
+
+    <!-- 2. Procesando -->
+    <section id="view-processing" class="hidden">
+      <div class="processing">
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="processing__phase">Analizando <b id="phase">…</b></p>
+        <p class="muted">El análisis dinámico en el sandbox puede tardar unos minutos.</p>
+      </div>
+    </section>
+
+    <!-- 3. Resultado (se rellena por JS) -->
+    <section id="view-result" class="hidden">
+      <div id="verdict" class="verdict">
+        <div id="verdict-badge" class="verdict__badge"></div>
+        <div class="verdict__text">
+          <b id="verdict-line"></b>
+          <span id="verdict-file"></span>
+        </div>
+        <div class="verdict__score">
+          <b id="verdict-score"></b>
+          <span>/ 100</span>
+        </div>
+      </div>
+
+      <div id="result-cards"></div>
+
+      <button id="reset-btn" class="btn">Analizar otro fichero</button>
+    </section>
+
+  </main>
+
+  <footer>
+    Portal de análisis de malware · estático local + dinámico en sandbox gestionado ·
+    Heurística orientativa, contrasta con criterio profesional.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

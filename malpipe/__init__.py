@@ -1,2 +1,5 @@
 """malpipe — pipeline automatizado de análisis de malware (estático + dinámico)."""
-__version__ = "0.1.0"
+from .pipeline import analyze, analyze_bytes
+
+__version__ = "1.0.0"
+__all__ = ["analyze", "analyze_bytes", "__version__"]

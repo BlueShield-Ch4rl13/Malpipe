@@ -1,0 +1,6 @@
+# Dependencias del portal web (backend FastAPI).
+# Instala también el núcleo:  pip install -r requirements.txt -r requirements-web.txt
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+httpx>=0.27

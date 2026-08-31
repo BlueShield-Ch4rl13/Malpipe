@@ -1,8 +1,11 @@
-pefile>=2024.8.26      # parseo de PE (Windows)
-yara-python>=4.5       # reglas YARA
-lief>=0.14             # parseo de ELF / Mach-O
-ppdeep>=20200505       # hash difuso (ssdeep en Python puro, agrupa familias)
-python-magic>=0.4.27   # identificación de tipo de fichero (libmagic)
-python-magic>=0.4.27; platform_system != "Windows"
-python-magic-bin>=0.4.14; platform_system == "Windows"
-requests>=2.31         # conector de sandbox dinámico (CAPE / tria.ge)
+# --- Núcleo (necesario) ---
+pefile>=2023.2.7        # parseo de cabecera PE
+requests>=2.31.0        # API del sandbox (tria.ge / VirusTotal)
+
+# --- Opcionales (mejoran el análisis; requieren libs del sistema) ---
+# yara-python>=4.5.0    # escaneo YARA        (necesita libyara)
+# ssdeep>=3.4           # fuzzy hashing        (necesita libfuzzy-dev)
+
+# --- Desarrollo ---
+# ruff>=0.6.0
+# pytest>=8.0.0

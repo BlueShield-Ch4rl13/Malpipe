@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "malpipe"
+version = "1.0.0"
+description = "Pipeline automatizado de análisis de malware (estático + dinámico) con informe y mapeo MITRE ATT&CK"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "CVL" }]
+dependencies = [
+    "pefile>=2023.2.7",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+full = ["yara-python>=4.5.0"]
+web = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "python-multipart>=0.0.9", "httpx>=0.27"]
+dev = ["ruff>=0.6.0", "pytest>=8.0.0"]
+
+[project.scripts]
+malpipe = "malpipe.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["malpipe*", "webapp*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# B008: el patrón `= File(...)` / `= Depends(...)` es idiomático y obligatorio en FastAPI
+ignore = ["B008"]
+# BLE001/S110: en un analizador de malware las capturas defensivas son intencionadas
+# (un PE corrupto no debe tumbar el pipeline). No se seleccionan esas familias.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,180 @@
+/* Portal malpipe — paleta del sitio de Carlos Villalba (slate-900 / azul / cian).
+   Autónomo: sin Tailwind. Tipografías desde Google Fonts. */
+
+:root {
+  --bg: #0f172a;
+  --bg2: #0a101f;
+  --panel: rgba(15, 23, 42, 0.8);
+  --border: #1e293b;
+  --border2: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --dim: #64748b;
+  --blue: #3b82f6;
+  --blue-l: #60a5fa;
+  --teal: #2dd4bf;
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --green: #22c55e;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+a { color: var(--blue-l); }
+
+/* ---------- Cabecera ---------- */
+.nav {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.nav__inner {
+  max-width: 64rem; margin: 0 auto; padding: 1rem 1.5rem;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.brand { font-weight: 800; letter-spacing: -0.02em; text-transform: uppercase; }
+.brand span { color: var(--blue); }
+.nav__back { font-size: 0.85rem; color: var(--muted); text-decoration: none; }
+.nav__back:hover { color: var(--blue-l); }
+
+.wrap { max-width: 46rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+
+/* ---------- Hero / intro ---------- */
+.hero h1 { font-size: 2rem; font-weight: 800; margin: 0 0 0.5rem; }
+.hero .grad {
+  background: linear-gradient(90deg, var(--blue-l), var(--teal));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero p { color: var(--muted); font-size: 1.05rem; }
+.eyebrow {
+  display: inline-block; font-size: 0.72rem; letter-spacing: 0.25em;
+  text-transform: uppercase; color: var(--teal); margin-bottom: 0.75rem;
+}
+
+/* ---------- Zona de subida ---------- */
+.drop {
+  margin-top: 2rem; border: 2px dashed var(--border2); border-radius: 1rem;
+  padding: 3rem 1.5rem; text-align: center; cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: rgba(30, 41, 59, 0.2);
+}
+.drop:hover, .drop.drag { border-color: var(--blue); background: rgba(59,130,246,0.06); }
+.drop__icon { font-size: 2.5rem; color: var(--dim); }
+.drop__main { font-weight: 600; margin: 0.75rem 0 0.25rem; }
+.drop__sub { color: var(--muted); font-size: 0.85rem; }
+.drop__file {
+  margin-top: 1rem; color: var(--blue-l); font-size: 0.9rem; word-break: break-all;
+}
+#file-input { display: none; }
+
+#turnstile { margin: 1.25rem 0; min-height: 0; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 0.5rem; justify-content: center;
+  width: 100%; margin-top: 1rem; padding: 0.9rem 1.5rem;
+  background: var(--blue); color: white; border: none; border-radius: 0.75rem;
+  font-size: 1rem; font-weight: 700; cursor: pointer; transition: background 0.2s;
+  font-family: inherit;
+}
+.btn:hover:not(:disabled) { background: #2563eb; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.note {
+  display: flex; gap: 0.6rem; margin-top: 1.5rem; padding: 0.9rem 1.1rem;
+  font-size: 0.82rem; color: var(--muted);
+  background: rgba(45,212,191,0.06); border: 1px solid rgba(45,212,191,0.25);
+  border-radius: 0.6rem;
+}
+
+/* ---------- Estado de proceso ---------- */
+.processing { text-align: center; padding: 3rem 1rem; }
+.spinner {
+  width: 3rem; height: 3rem; margin: 0 auto 1.5rem; border-radius: 50%;
+  border: 3px solid var(--border2); border-top-color: var(--blue);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.processing__phase { color: var(--muted); }
+.processing__phase b { color: var(--blue-l); }
+
+/* ---------- Veredicto ---------- */
+.verdict {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.5rem;
+  padding: 1.75rem; border-radius: 1rem; margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+}
+.verdict__badge {
+  font-size: 1.4rem; font-weight: 800; padding: 0.5rem 1.5rem; border-radius: 0.6rem;
+  color: #0f172a;
+}
+.verdict__text { flex: 1; min-width: 14rem; }
+.verdict__text b { display: block; font-size: 1.05rem; margin-bottom: 0.15rem; }
+.verdict__text span { color: var(--muted); font-size: 0.9rem; }
+.verdict__score { text-align: center; }
+.verdict__score b { display: block; font-size: 1.8rem; }
+.verdict__score span { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; }
+
+/* colores por veredicto (se aplican por clase, no en línea) */
+.v-malicioso  { background: rgba(239,68,68,0.08);  border-color: rgba(239,68,68,0.4); }
+.v-malicioso  .verdict__badge { background: var(--red); }
+.v-sospechoso { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.4); }
+.v-sospechoso .verdict__badge { background: var(--amber); }
+.v-limpio     { background: rgba(34,197,94,0.08);  border-color: rgba(34,197,94,0.4); }
+.v-limpio     .verdict__badge { background: var(--green); }
+.v-desconocido .verdict__badge { background: var(--dim); }
+
+/* ---------- Tarjetas ---------- */
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-left: 4px solid var(--blue); border-radius: 0.9rem;
+  padding: 1.25rem 1.5rem; margin-bottom: 1.25rem;
+}
+.card h2 { font-size: 1.05rem; margin: 0 0 0.85rem; display: flex; gap: 0.5rem; align-items: center; }
+.card h2 .i { color: var(--blue); }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+td, th { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+.k { color: var(--muted); width: 32%; }
+code {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.82em;
+  background: var(--border); color: #7dd3fc; padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem; word-break: break-all;
+}
+.chip {
+  display: inline-block; background: var(--border); border: 1px solid var(--border2);
+  color: #cbd5e1; border-radius: 0.3rem; padding: 0.15rem 0.5rem; margin: 0.15rem;
+  font-size: 0.72rem; font-family: 'JetBrains Mono', monospace;
+}
+.muted { color: var(--dim); }
+ul.ioc { margin: 0.25rem 0; padding-left: 1.1rem; }
+ul.ioc li { margin-bottom: 0.3rem; }
+
+.hidden { display: none; }
+
+/* ---------- Responsive & accesibilidad ---------- */
+:focus-visible { outline: 2px solid var(--blue-l); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .hero h1 { font-size: 1.6rem; }
+  .verdict__badge { font-size: 1.15rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .spinner { animation-duration: 2s; }
+  .drop, .btn { transition: none; }
+}
+
+footer {
+  max-width: 46rem; margin: 0 auto; padding: 2rem 1.5rem 3rem;
+  color: var(--dim); font-size: 0.75rem; text-align: center;
+  border-top: 1px solid var(--border);
+}

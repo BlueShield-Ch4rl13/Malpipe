@@ -1,0 +1,34 @@
+# Ejecuta malpipe en la VM con volúmenes montados.
+#
+#   Muestras a analizar  ->  ./samples   (móntalo de solo lectura)
+#   Informes generados   ->  ./reports
+#
+# Uso:
+#   docker compose run --rm malpipe /samples -o /reports
+#
+# Las claves de API se leen de .env (no se hornean en la imagen).
+
+services:
+  # --- CLI: analizar ficheros/carpetas por línea de comandos ---
+  malpipe:
+    build: .
+    image: malpipe:latest
+    env_file: .env
+    volumes:
+      - ./samples:/samples:ro
+      - ./reports:/reports
+    # el contenedor no necesita red entrante; solo salida hacia el sandbox
+    # (déjalo así salvo que añadas detonación local, que iría en OTRO host aislado)
+
+  # --- Portal web: cualquiera sube un fichero y recibe un veredicto ---
+  #   Local:   docker compose up web   ->   http://localhost:8000
+  #   Público: exponlo con Cloudflare Tunnel (ver README), NO abriendo puertos.
+  web:
+    build: .
+    image: malpipe:latest
+    env_file: .env
+    entrypoint: []
+    command: ["uvicorn", "webapp.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
