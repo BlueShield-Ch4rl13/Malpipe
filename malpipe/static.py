@@ -13,25 +13,41 @@ con LIEF. Cualquier otro tipo se analiza igualmente por hashes, strings y YARA.
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pefile
 import ppdeep
 
+logger = logging.getLogger(__name__)
+
 try:
     import magic  # python-magic (libmagic)
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     magic = None
 try:
     import lief
     lief.logging.disable()
-except Exception:  # pragma: no cover
+except (ImportError, AttributeError):  # pragma: no cover
     lief = None
 
 # Nombres de sección estándar de compiladores; los que no estén levantan sospecha
 STD_SECTIONS = {".text", ".data", ".rdata", ".bss", ".idata", ".edata", ".pdata",
                 ".rsrc", ".reloc", ".tls", ".debug", ".CRT", ".gfids", ".didat"}
+
+# Cabeceras mágicas de Mach-O (32/64 bits, big/little endian y fat binary)
+MACHO_MAGIC = (
+    b"\xfe\xed\xfa\xce",
+    b"\xfe\xed\xfa\xcf",
+    b"\xcf\xfa\xed\xfe",
+    b"\xca\xfe\xba\xbe",
+)
+
+# Umbrales de detección (ajustables desde aquí)
+HIGH_ENTROPY = 7.2   # entropía por encima de la cual una sección parece empaquetada
+MIN_IMPORTS = 5      # menos imports que esto sugiere un binario empaquetado
 
 
 def shannon_entropy(data: bytes) -> float:
@@ -51,10 +67,14 @@ def shannon_entropy(data: bytes) -> float:
 
 
 def hashes(data: bytes) -> dict:
-    """Hashes criptográficos + hash difuso para agrupar variantes de una familia."""
+    """Hashes criptográficos + hash difuso para agrupar variantes de una familia.
+
+    MD5 y SHA-1 se usan aquí como identificadores de fichero (IOC), no como
+    primitivas de seguridad: de ahí usedforsecurity=False.
+    """
     return {
-        "md5": hashlib.md5(data).hexdigest(),
-        "sha1": hashlib.sha1(data).hexdigest(),
+        "md5": hashlib.md5(data, usedforsecurity=False).hexdigest(),
+        "sha1": hashlib.sha1(data, usedforsecurity=False).hexdigest(),
         "sha256": hashlib.sha256(data).hexdigest(),
         "ssdeep": ppdeep.hash(data),
     }
@@ -67,7 +87,7 @@ def identify(path: Path, data: bytes) -> dict:
         try:
             ftype = magic.from_buffer(data)
         except Exception:
-            pass
+            logger.debug("magic no pudo identificar el buffer", exc_info=True)
     info = {
         "filename": path.name,
         "size": len(data),
@@ -80,7 +100,7 @@ def identify(path: Path, data: bytes) -> dict:
         info["format"] = "PE"
     elif data[:4] == b"\x7fELF":
         info["format"] = "ELF"
-    elif data[:4] in (b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe", b"\xca\xfe\xba\xbe"):
+    elif data[:4] in MACHO_MAGIC:
         info["format"] = "Mach-O"
     else:
         info["format"] = "otro"
@@ -105,6 +125,7 @@ def analyze_pe(data: bytes) -> dict:
     try:
         out["imphash"] = pe.get_imphash()
     except Exception:
+        logger.debug("pefile no pudo calcular el imphash", exc_info=True)
         out["imphash"] = ""
 
     # Secciones con entropía y permisos
@@ -127,7 +148,11 @@ def analyze_pe(data: bytes) -> dict:
     if hasattr(pe, "DIRECTORY_ENTRY_IMPORT"):
         for entry in pe.DIRECTORY_ENTRY_IMPORT:
             dll = entry.dll.decode("latin-1", "replace") if entry.dll else "?"
-            funcs = [imp.name.decode("latin-1", "replace") for imp in entry.imports if imp.name]
+            funcs = [
+                imp.name.decode("latin-1", "replace")
+                for imp in entry.imports
+                if imp.name
+            ]
             imports.setdefault(dll, []).extend(funcs)
     out["imports"] = imports
     out["import_count"] = sum(len(v) for v in imports.values())
@@ -141,8 +166,10 @@ def analyze_pe(data: bytes) -> dict:
     out["exports"] = exports
 
     # Recursos, firma embebida y callbacks TLS
-    out["resource_count"] = len(getattr(getattr(pe, "DIRECTORY_ENTRY_RESOURCE", None), "entries", []) or [])
-    out["has_signature"] = oh.DATA_DIRECTORY[4].VirtualAddress != 0  # solo presencia, no validez
+    resources = getattr(pe, "DIRECTORY_ENTRY_RESOURCE", None)
+    out["resource_count"] = len(getattr(resources, "entries", []) or [])
+    # Solo presencia de la firma, no validez
+    out["has_signature"] = oh.DATA_DIRECTORY[4].VirtualAddress != 0
     out["tls_callbacks"] = hasattr(pe, "DIRECTORY_ENTRY_TLS")
 
     out["anomalies"] = _pe_anomalies(out)
@@ -156,21 +183,26 @@ def _pe_anomalies(pe: dict) -> list[str]:
     for s in pe["sections"]:
         if s["exec"] and s["write"]:
             a.append(f"Sección {s['name']} con escritura + ejecución (RWX)")
-        if s["entropy"] >= 7.2 and s["rsize"] > 0:
-            a.append(f"Sección {s['name']} con entropía muy alta ({s['entropy']}) — posible empaquetado")
+        if s["entropy"] >= HIGH_ENTROPY and s["rsize"] > 0:
+            a.append(
+                f"Sección {s['name']} con entropía muy alta ({s['entropy']}) "
+                "— posible empaquetado"
+            )
         if s["name"] not in STD_SECTIONS and s["name"]:
             a.append(f"Nombre de sección no estándar: {s['name']}")
         if s["vsize"] > 0 and s["rsize"] == 0:
             a.append(f"Sección {s['name']} virtual sin datos en disco")
-    if pe["import_count"] <= 5:
-        a.append(f"Muy pocos imports ({pe['import_count']}) — típico de binarios empaquetados")
+    if pe["import_count"] <= MIN_IMPORTS:
+        a.append(
+            f"Muy pocos imports ({pe['import_count']}) "
+            "— típico de binarios empaquetados"
+        )
     if not pe.get("imphash"):
         a.append("Sin tabla de imports resoluble")
     return a
 
 
 def _ts(t: int) -> str:
-    from datetime import datetime, timezone
     if not t:
         return ""
     try:
@@ -189,9 +221,18 @@ def analyze_elf(path: Path) -> dict:
         if b is None:
             return {"error": "ELF no parseable"}
     except Exception as exc:
+        logger.warning("ELF ilegible (%s): %s", path.name, exc, exc_info=True)
         return {"error": f"ELF ilegible: {exc}"}
-    sections = [{"name": s.name, "size": s.size, "entropy": round(getattr(s, "entropy", 0.0), 3)}
-                for s in b.sections]
+
+    sections = [
+        {
+            "name": s.name,
+            "size": s.size,
+            "entropy": round(getattr(s, "entropy", 0.0), 3),
+        }
+        for s in b.sections
+    ]
+
     imported = []
     for attr in ("imported_functions", "symbols"):
         try:
@@ -200,6 +241,12 @@ def analyze_elf(path: Path) -> dict:
             if imported:
                 break
         except Exception:
+            logger.debug("no se pudo leer '%s' del ELF", attr, exc_info=True)
             continue
-    return {"sections": sections, "imports": {"": imported}, "import_count": len(imported),
-            "anomalies": []}
+
+    return {
+        "sections": sections,
+        "imports": {"": imported},
+        "import_count": len(imported),
+        "anomalies": [],
+    }
