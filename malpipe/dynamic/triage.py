@@ -81,7 +81,7 @@ def run_triage(filename: str, data: bytes) -> DynamicResult:
 
         analysis = overview.get("analysis", {})
         res.score = analysis.get("score")
-        family = analysis.get("family") or overview.get("targets", [{}])[0].get("family")
+        family = analysis.get("family") or (overview.get("targets") or [{}])[0].get("family")
         if isinstance(family, list):
             family = ", ".join(family)
         res.family = family or ""

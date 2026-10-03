@@ -17,6 +17,7 @@ import httpx
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from .jobs import store
 
@@ -104,15 +105,31 @@ async def api_analyze(
             detail=f"Demasiados análisis. Máximo {RATE_MAX} cada {RATE_WINDOW // 60} min.",
         )
 
-    data = await file.read()
-    if not data:
-        raise HTTPException(status_code=400, detail="Fichero vacío.")
-    if len(data) > MAX_MB * 1024 * 1024:
+    max_bytes = MAX_MB * 1024 * 1024
+
+    # Rechazo temprano por cabecera: si el cuerpo ya declara exceder el límite,
+    # cortamos antes de buffear nada.
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > max_bytes:
         raise HTTPException(status_code=413, detail=f"El fichero supera {MAX_MB} MB.")
 
+    # Lectura en trozos con tope: nunca retenemos en memoria más de lo permitido.
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(1024 * 1024):
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(status_code=413, detail=f"El fichero supera {MAX_MB} MB.")
+        chunks.append(chunk)
+    data = b"".join(chunks)
+
+    if not data:
+        raise HTTPException(status_code=400, detail="Fichero vacío.")
+
     # El fichero se analiza en memoria y NO se guarda en disco.
+    # El estático es trabajo CPU-bound: se saca del event loop a un hilo.
     filename = os.path.basename(file.filename or "sample.bin")
-    job = store.create(filename, data)
+    job = await run_in_threadpool(store.create, filename, data)
     del data
     return {"job_id": job.id, "status": job.status, "phase": job.phase}
 

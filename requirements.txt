@@ -1,6 +1,6 @@
 # --- Núcleo (necesario) ---
-pefile>=2023.2.7        # parseo de cabecera PE
-requests>=2.31.0        # API del sandbox (tria.ge / VirusTotal)
+pefile==2024.8.26       # parseo de cabecera PE
+requests==2.33.1        # API del sandbox (tria.ge / VirusTotal)
 
 # --- Opcionales (mejoran el análisis; requieren libs del sistema) ---
 # yara-python>=4.5.0    # escaneo YARA        (necesita libyara)

@@ -1,0 +1,14 @@
+# Entorno local (nunca se sube: contiene claves de API)
+.env
+
+# Muestras e informes generados (no son código)
+samples/
+reports/
+
+# Artefactos de Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/

@@ -37,7 +37,7 @@ jobs:
         run: ruff check .
 
       - name: Tests (pytest)
-        run: pytest -q || echo "Sin tests todavía — añadir en /tests"
+        run: pytest -q
 
   secret-scan:
     name: Escaneo de secretos
