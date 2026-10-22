@@ -9,9 +9,11 @@ FROM python:3.12-slim
 #     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+# .dockerignore deja fuera .env (claves), samples/ (malware) y reports/
 COPY . /app
 
-RUN pip install --no-cache-dir ".[web]"
+# full = yara-python: sin él, la imagen no ejecutaba ninguna regla YARA
+RUN pip install --no-cache-dir ".[web,full]"
 
 # Usuario sin privilegios
 RUN useradd -m analyst

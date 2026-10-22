@@ -29,6 +29,11 @@ services:
     env_file: .env
     entrypoint: []
     command: ["uvicorn", "webapp.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    # Solo en 127.0.0.1: cloudflared corre en el host y entra por ahí. Con
+    # "8000:8000" el puerto quedaba abierto a toda la red, contra lo que dice
+    # el README, y se podía saltar Cloudflare (y su límite por IP).
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    environment:
+      - MALPIPE_BEHIND_CLOUDFLARE=1
     restart: unless-stopped
