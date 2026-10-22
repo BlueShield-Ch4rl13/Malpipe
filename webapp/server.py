@@ -1,23 +1,25 @@
 """Backend del portal web de malpipe.
 
 Expone una API mínima sobre el pipeline y sirve el frontend estático.
-Seguridad de base: no persiste ficheros, límite de tamaño, rate-limit por IP
-y verificación opcional de Cloudflare Turnstile.
+Seguridad de base: límite de tamaño antes de leer el cuerpo, la muestra solo
+en memoria, rate-limit por IP y verificación opcional de Cloudflare Turnstile.
 
 Arrancar:
-    uvicorn webapp.server:app --host 0.0.0.0 --port 8000
+    uvicorn webapp.server:app --host 127.0.0.1 --port 8000
 """
 from __future__ import annotations
 
+import ipaddress
 import os
 import time
 from collections import defaultdict
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
+from starlette.formparsers import MultiPartParser
 
 from .jobs import store
 
@@ -27,20 +29,91 @@ RATE_MAX = int(os.getenv("MALPIPE_RATE_MAX", "5"))          # análisis...
 RATE_WINDOW = int(os.getenv("MALPIPE_RATE_WINDOW", "600"))  # ...por esta ventana (s)
 TURNSTILE_SECRET = os.getenv("TURNSTILE_SECRET", "")
 TURNSTILE_SITEKEY = os.getenv("TURNSTILE_SITEKEY", "")
+# Solo detrás de Cloudflare Tunnel: entonces la IP real llega en CF-Connecting-IP.
+BEHIND_CLOUDFLARE = os.getenv("MALPIPE_BEHIND_CLOUDFLARE", "0") == "1"
+
+# Starlette guarda en memoria hasta spool_max_size y el resto lo vuelca a un
+# fichero temporal en /tmp. Con el umbral igual al límite de subida, una
+# muestra nunca toca el disco (el límite se aplica antes, en LimiteCuerpo).
+MultiPartParser.spool_max_size = MAX_MB * 1024 * 1024 + 64 * 1024
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 app = FastAPI(title="malpipe · portal de análisis", docs_url=None, redoc_url=None)
+
+
+class LimiteCuerpo:
+    """Corta /api/analyze en cuanto el cuerpo pasa del límite, mientras llega.
+
+    El handler no ve el fichero hasta que FastAPI ha leído y parseado el
+    cuerpo entero: comprobar el tamaño ahí ya era tarde. Este middleware ASGI
+    rechaza por Content-Length y, si no lo hay o miente, cuenta los bytes
+    según entran.
+    """
+
+    def __init__(self, app, max_bytes: int, ruta: str = "/api/analyze") -> None:
+        self.app, self.max_bytes, self.ruta = app, max_bytes, ruta
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["path"] != self.ruta:
+            return await self.app(scope, receive, send)
+        cabeceras = dict(scope.get("headers") or [])
+        declarado = cabeceras.get(b"content-length", b"")
+        if declarado.isdigit() and int(declarado) > self.max_bytes:
+            return await self._rechazar(send)
+        recibidos = 0
+
+        async def receive_limitado():
+            nonlocal recibidos
+            mensaje = await receive()
+            if mensaje["type"] == "http.request":
+                recibidos += len(mensaje.get("body", b""))
+                if recibidos > self.max_bytes:
+                    raise _CuerpoDemasiadoGrande
+            return mensaje
+
+        try:
+            await self.app(scope, receive_limitado, send)
+        except _CuerpoDemasiadoGrande:
+            await self._rechazar(send)
+
+    async def _rechazar(self, send):
+        cuerpo = f'{{"detail":"El fichero supera {MAX_MB} MB."}}'.encode()
+        await send({"type": "http.response.start", "status": 413,
+                    "headers": [(b"content-type", b"application/json"),
+                                (b"content-length", str(len(cuerpo)).encode())]})
+        await send({"type": "http.response.body", "body": cuerpo})
+
+
+class _CuerpoDemasiadoGrande(Exception):
+    pass
+
+
+# Margen para las cabeceras multipart y el campo de Turnstile
+app.add_middleware(LimiteCuerpo, max_bytes=MAX_MB * 1024 * 1024 + 64 * 1024)
 
 # --- Rate limiting sencillo en memoria (Cloudflare hace el trabajo pesado) ---
 _hits: dict[str, list[float]] = defaultdict(list)
 
 
 def _client_ip(request: Request) -> str:
-    # Detrás de Cloudflare, la IP real llega en CF-Connecting-IP.
-    return request.headers.get("cf-connecting-ip") or (
-        request.client.host if request.client else "?"
-    )
+    """IP para el rate-limit.
+
+    CF-Connecting-IP solo se cree si el portal está detrás de Cloudflare
+    Tunnel (MALPIPE_BEHIND_CLOUDFLARE=1) y la conexión llega del túnel, es
+    decir, de una dirección local o privada. Antes se creía siempre: con el
+    puerto abierto, cualquiera mandaba una IP inventada en cada petición y el
+    límite por IP no limitaba nada.
+    """
+    directa = request.client.host if request.client else "?"
+    if BEHIND_CLOUDFLARE:
+        try:
+            origen = ipaddress.ip_address(directa)
+        except ValueError:
+            return directa
+        if origen.is_loopback or origen.is_private:
+            return request.headers.get("cf-connecting-ip") or directa
+    return directa
 
 
 def _rate_ok(ip: str) -> bool:
@@ -93,7 +166,10 @@ async def api_config():
 async def api_analyze(
     request: Request,
     file: UploadFile = File(...),
-    cf_turnstile_response: str = "",
+    # Form: el frontend lo manda como campo del formulario. Declarado como
+    # str a secas, FastAPI lo buscaba en la URL, llegaba vacío y, con
+    # Turnstile configurado, todas las subidas daban 403.
+    cf_turnstile_response: str = Form(""),
 ):
     ip = _client_ip(request)
 
@@ -126,7 +202,8 @@ async def api_analyze(
     if not data:
         raise HTTPException(status_code=400, detail="Fichero vacío.")
 
-    # El fichero se analiza en memoria y NO se guarda en disco.
+    # La muestra se analiza en memoria y no se guarda en disco (ver
+    # spool_max_size). Si MALPIPE_WEB_DYNAMIC=1, se envía además a tria.ge.
     # El estático es trabajo CPU-bound: se saca del event loop a un hilo.
     filename = os.path.basename(file.filename or "sample.bin")
     job = await run_in_threadpool(store.create, filename, data)
