@@ -58,7 +58,7 @@ class JobStore:
         with self._lock:
             job.report = report
 
-        if config.dynamic_available:
+        if config.dynamic_available and config.web_dynamic:
             job.phase = "dinámico (sandbox)"
             t = threading.Thread(
                 target=self._run_dynamic, args=(job.id, filename, data), daemon=True
@@ -66,7 +66,7 @@ class JobStore:
             t.start()
         else:
             job.status = "completado"
-            job.phase = "solo estático (sin sandbox configurado)"
+            job.phase = "solo estático"
         return job
 
     def _run_dynamic(self, job_id: str, filename: str, data: bytes) -> None:

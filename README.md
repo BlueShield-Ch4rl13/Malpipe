@@ -28,7 +28,7 @@ flowchart LR
 
 **Estático (local, seguro):** hashes (MD5/SHA1/SHA256, imphash, ssdeep opcional), parseo de cabecera PE (secciones, entropía, imports, imports sospechosos), extracción de strings e IOCs (IPs, dominios, URLs, emails) y escaneo YARA.
 
-**Dinámico (sandbox gestionado):** envía la muestra a [tria.ge](https://tria.ge) (o VirusTotal), espera el informe y extrae puntuación, familia y firmas de comportamiento.
+**Dinámico (sandbox gestionado):** envía la muestra a [tria.ge](https://tria.ge), espera el informe y extrae puntuación, familia y firmas de comportamiento. (VirusTotal no está implementado.)
 
 **Enriquecimiento:** mapeo heurístico a técnicas ATT&CK desde los imports (estático) y las firmas (dinámico), más una puntuación agregada 0–100 y un veredicto (`limpio` / `sospechoso` / `malicioso`).
 
@@ -74,7 +74,6 @@ Las claves se leen de variables de entorno (copia `.env.example` a `.env`, que e
 | Variable | Descripción |
 |---|---|
 | `TRIAGE_API_KEY` | Clave de API de tria.ge — habilita el análisis dinámico |
-| `VT_API_KEY` | Clave de VirusTotal (alternativa) |
 | `MALPIPE_DYNAMIC_TIMEOUT` | Segundos de espera del informe del sandbox (300 por defecto) |
 | `MALPIPE_YARA_DIR` | Carpeta de reglas YARA (`rules/` por defecto) |
 
@@ -88,12 +87,12 @@ Un frontend para que **cualquiera, sin perfil técnico, suba un fichero y reciba
 
 ```bash
 pip install -r requirements.txt -r requirements-web.txt
-uvicorn webapp.server:app --host 0.0.0.0 --port 8000    #  ->  http://localhost:8000
+uvicorn webapp.server:app --host 127.0.0.1 --port 8000  #  ->  http://localhost:8000
 # o con Docker:
 docker compose up web
 ```
 
-**No es estático.** A diferencia de un dashboard servido por Cloudflare Pages, el portal necesita un backend siempre encendido, porque tiene que recibir la subida, **guardar la clave del sandbox en secreto** (nunca en el navegador) y llamar al sandbox bajo demanda. El fichero se analiza **en memoria y no se guarda** en disco.
+**No es estático.** A diferencia de un dashboard servido por Cloudflare Pages, el portal necesita un backend siempre encendido, porque tiene que recibir la subida, **guardar la clave del sandbox en secreto** (nunca en el navegador) y llamar al sandbox bajo demanda. La muestra se analiza **en memoria**: el tamaño se corta mientras llega (antes de que FastAPI lea el cuerpo) y el umbral de volcado a disco de Starlette está por encima del límite de subida, así que no se escribe en `/tmp`.
 
 ### API
 
@@ -105,7 +104,7 @@ docker compose up web
 
 ### Despliegue público con Cloudflare Tunnel (recomendado)
 
-Para exponerlo **sin abrir puertos** de tu servidor y con protección delante:
+Para exponerlo **sin abrir puertos** de tu servidor y con protección delante (el `docker-compose.yml` publica el 8000 solo en `127.0.0.1`, para que no haya otra forma de entrar que el túnel):
 
 ```bash
 cloudflared tunnel --url http://localhost:8000
@@ -119,13 +118,17 @@ Delante, Cloudflare te da TLS, WAF y rate-limiting. Enlázalo desde `cti.carlosv
 Un endpoint público que acepta ficheros de cualquiera exige cuidado. Lo que ya trae y lo que debes activar:
 
 - **Nunca ejecuta en tu equipo** — la detonación ocurre en el sandbox gestionado.
-- **No persiste ficheros** — se analizan en memoria y se descartan.
-- **Rate-limit por IP** integrado (`MALPIPE_RATE_MAX` / `MALPIPE_RATE_WINDOW`) y **límite de tamaño** (`MALPIPE_MAX_UPLOAD_MB`).
+- **No persiste ficheros en el servidor** — se analizan en memoria y se descartan. Pero si activas el dinámico en el portal (`MALPIPE_WEB_DYNAMIC=1`), **cada muestra de un tercero se sube a tria.ge con tu cuenta**, y en el plan gratuito los análisis son públicos. Por eso viene desactivado: el portal hace solo estático salvo que lo pidas.
+- **Rate-limit por IP** integrado (`MALPIPE_RATE_MAX` / `MALPIPE_RATE_WINDOW`) y **límite de tamaño** (`MALPIPE_MAX_UPLOAD_MB`). La IP real (`CF-Connecting-IP`) solo se cree con `MALPIPE_BEHIND_CLOUDFLARE=1` y si la conexión llega del túnel; si no, cualquiera inventaba una IP por petición y el límite no limitaba.
 - **Anti-bots** — activa Cloudflare Turnstile poniendo `TURNSTILE_SITEKEY` y `TURNSTILE_SECRET` (ya lo usas en tu web). Sin esto, cualquiera puede automatizar subidas.
 - **Coste/cuota** — cada análisis dinámico consume cuota de tu API de sandbox. Con Turnstile + rate-limit lo tienes acotado; añade un tope diario si lo abres del todo.
 - **Contenido** — un formulario público de subida puede recibir contenido ilícito. Añade un aviso legal, no almacenes nada y apóyate en el manejo del propio sandbox.
 
-Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), `MALPIPE_RATE_MAX` (5), `MALPIPE_RATE_WINDOW` (600), `TURNSTILE_SITEKEY`, `TURNSTILE_SECRET`.
+Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), `MALPIPE_RATE_MAX` (5), `MALPIPE_RATE_WINDOW` (600), `TURNSTILE_SITEKEY`, `TURNSTILE_SECRET`, `MALPIPE_WEB_DYNAMIC` (0), `MALPIPE_BEHIND_CLOUDFLARE` (0).
+
+### Cómo está probado
+
+`pytest` en el CI con las dependencias web y YARA instaladas (antes `test_webapp.py` se saltaba entero): subida y resultado, fichero vacío, el token de Turnstile leído del formulario, el corte por tamaño antes de llegar al análisis, que `CF-Connecting-IP` no se cree desde fuera del túnel, que una regla YARA rota no apague las demás y que todas las reglas de `rules/` compilan. El análisis dinámico contra tria.ge no se prueba en el CI (necesita una clave).
 
 ---
 
