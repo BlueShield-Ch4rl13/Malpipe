@@ -7,10 +7,15 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    # --- Sandbox dinámico (elige uno) ---
+    # --- Sandbox dinámico ---
+    # Solo tria.ge está implementado. (Hubo una variable VT_API_KEY que
+    # activaba el dinámico sin que existiera un cliente de VirusTotal.)
     triage_api_key: str = os.getenv("TRIAGE_API_KEY", "")
     triage_base_url: str = os.getenv("TRIAGE_BASE_URL", "https://tria.ge/api/v0")
-    vt_api_key: str = os.getenv("VT_API_KEY", "")
+    # El portal web solo manda muestras de terceros al sandbox si se pide de
+    # forma explícita: cada subida va a tria.ge con TU cuenta (y en las cuentas
+    # gratuitas el análisis es público).
+    web_dynamic: bool = os.getenv("MALPIPE_WEB_DYNAMIC", "0") == "1"
 
     # --- Comportamiento ---
     # Segundos máximos esperando el informe del sandbox antes de rendirse.
@@ -22,7 +27,7 @@ class Config:
 
     @property
     def dynamic_available(self) -> bool:
-        return bool(self.triage_api_key or self.vt_api_key)
+        return bool(self.triage_api_key)
 
 
 config = Config()

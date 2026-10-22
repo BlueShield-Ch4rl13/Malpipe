@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
 
     do_dynamic = not args.no_dynamic
     if do_dynamic and not config.dynamic_available:
-        print("[!] Sin sandbox configurado (TRIAGE_API_KEY/VT_API_KEY). "
+        print("[!] Sin sandbox configurado (TRIAGE_API_KEY). "
               "Se ejecuta solo estático.", file=sys.stderr)
 
     os.makedirs(args.output, exist_ok=True)
