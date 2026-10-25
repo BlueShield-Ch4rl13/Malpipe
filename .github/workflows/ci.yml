@@ -1,6 +1,4 @@
-# CI — lint, tests y escaneo de secretos.
-# Copia este fichero a  .github/workflows/ci.yml  en cada repo de Python.
-# El badge verde en el README comunica higiene y buenas prácticas.
+# CI — lint, tests, el portal del navegador en Chromium y escaneo de secretos.
 
 name: CI
 
@@ -38,7 +36,38 @@ jobs:
         run: ruff check .
 
       - name: Tests (pytest)
-        run: pytest -q
+        # El portal se prueba en su propio job (necesita Node y Chromium)
+        run: pytest -q --ignore=tests/test_portal.py
+
+  portal:
+    name: Portal del navegador (Pyodide + YARA-X en Chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Construir web/dist (lo mismo que hace Cloudflare)
+        run: npm ci && npm run build
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Dependencias y Chromium
+        run: |
+          pip install -e ".[dev]"
+          python -m playwright install --with-deps chromium
+
+      - name: Portal de extremo a extremo, con la CSP de produccion
+        run: pytest -q tests/test_portal.py
 
   secret-scan:
     name: Escaneo de secretos
