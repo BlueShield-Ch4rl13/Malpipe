@@ -9,6 +9,7 @@ escalar a varios workers, sustituir por Redis o una base de datos.
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 import uuid
@@ -17,12 +18,29 @@ from typing import Literal
 
 from malpipe import analyze_bytes
 from malpipe.config import config
+from malpipe.enrich.cti import cargar_feed
 from malpipe.models import Report
 
 Status = Literal["procesando", "completado", "error"]
 
 # Cuánto se conserva un job terminado antes de purgarlo (segundos)
 _TTL = 1800
+
+# News CTI: con MALPIPE_WEB_CTI=1 cada análisis se cruza con el feed, que se
+# descarga como mucho una vez por hora.
+_CTI = {"feed": None, "cargado": 0.0}
+_CTI_TTL = 3600
+
+
+def _feed_cti() -> dict | None:
+    if os.getenv("MALPIPE_WEB_CTI", "0") != "1":
+        return None
+    if _CTI["feed"] is None or time.time() - _CTI["cargado"] > _CTI_TTL:
+        try:
+            _CTI["feed"], _CTI["cargado"] = cargar_feed(config.cti_url), time.time()
+        except Exception:  # noqa: BLE001 - sin feed se analiza igual
+            _CTI["cargado"] = time.time()
+    return _CTI["feed"]
 
 
 @dataclass
@@ -54,7 +72,7 @@ class JobStore:
             self._jobs[job.id] = job
 
         # Estático ya mismo (rápido, sin ejecutar nada).
-        report = analyze_bytes(filename, data, do_dynamic=False)
+        report = analyze_bytes(filename, data, do_dynamic=False, cti_feed=_feed_cti())
         with self._lock:
             job.report = report
 
@@ -72,7 +90,7 @@ class JobStore:
     def _run_dynamic(self, job_id: str, filename: str, data: bytes) -> None:
         try:
             # Reanaliza con dinámico activado; devuelve informe completo.
-            full = analyze_bytes(filename, data, do_dynamic=True)
+            full = analyze_bytes(filename, data, do_dynamic=True, cti_feed=_feed_cti())
             with self._lock:
                 job = self._jobs.get(job_id)
                 if job:
