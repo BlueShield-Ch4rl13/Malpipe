@@ -16,3 +16,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+# El portal estático (box/, ~18 MB de WebAssembly) y Node no hacen falta en la imagen
+box/
+node_modules/
+scripts/

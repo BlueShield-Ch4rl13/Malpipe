@@ -5,8 +5,9 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "node web/construir.mjs",
-    "servir": "node web/construir.mjs && npx --yes wrangler@4 dev"
+    "box": "node scripts/box.mjs",
+    "build": "node scripts/box.mjs",
+    "servir": "python3 tests/servidor_estatico.py"
   },
   "dependencies": {
     "@virustotal/yara-x": "1.21.0",

@@ -1,11 +1,11 @@
 """El portal del navegador de extremo a extremo, en Chromium de verdad.
 
-Construye primero con `npm ci && npm run build`. Se sirve web/dist con las
-mismas cabeceras que en Cloudflare (CSP incluida) y el feed de News CTI se
+Se sirve box/ (lo que se publica, ya con el motor dentro) con las mismas
+cabeceras que en Cloudflare (CSP incluida) y el feed de News CTI se
 sustituye por uno de prueba. Comprueba que Pyodide y YARA-X arrancan bajo esa
 CSP, que el analisis sale igual que en la CLI y que las descargas funcionan.
 
-Contra el portal ya publicado (o contra `npx wrangler dev`):
+Contra el portal ya publicado:
     MALPIPE_PORTAL_URL=https://box.carlosvillalbalagos.com/ pytest tests/test_portal.py
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ import servidor_estatico
 sync_api = pytest.importorskip("playwright.sync_api")
 URL_EXTERNA = os.environ.get("MALPIPE_PORTAL_URL", "")
 pytestmark = pytest.mark.skipif(not URL_EXTERNA and not (servidor_estatico.DIST / "index.html").exists(),
-                                reason="falta web/dist: npm ci && npm run build")
+                                reason="falta el motor en box/: npm ci && npm run box")
 ESPERA = 180_000          # la primera carga descarga y compila ~18 MB de WebAssembly
 
 FEED = {"generated_utc": "2026-10-25T06:00:00Z", "iocs": [
@@ -67,6 +67,13 @@ def resultado(page) -> str:
     return page.inner_text("#resultado")
 
 
+def pestana(page, id_: str) -> str:
+    """Abre una pestaña del detalle y devuelve el texto de su panel."""
+    page.click(f"#pes-{id_}")
+    assert page.get_attribute(f"#pes-{id_}", "aria-selected") == "true"
+    return page.inner_text(f"#pan-{id_}")
+
+
 def sin_errores(page):
     assert not [e for e in page.errores if "Content Security Policy" in e or "Refused" in e], page.errores
     assert not page.errores, page.errores
@@ -78,7 +85,10 @@ def test_beacon_sintetico(pagina):
     assert pagina.inner_text(".veredicto") == "MALICIOSO"
     assert "Cobalt Strike" in texto and "hxxps://cdn[.]ejemplo-malo[.]test:443/jquery-3[.]3[.]1[.]min[.]js" in texto
     assert "configuración de Cobalt Strike extraída" in texto
-    assert "cdn[.]ejemplo-malo[.]test" in pagina.inner_text(".tarjeta:has(h3:text('News CTI'))")
+    assert "cdn[.]ejemplo-malo[.]test" in pestana(pagina, "cti")
+    with pagina.expect_download() as d:
+        pagina.click("#btn-json")
+    assert json.loads(Path(d.value.path()).read_text(encoding="utf-8"))["verdict"] == "malicioso"
     with pagina.expect_download() as d:
         pagina.click("button:text('STIX 2.1')")
     stix = json.loads(Path(d.value.path()).read_text(encoding="utf-8"))
@@ -91,8 +101,14 @@ def test_beacon_sintetico(pagina):
 
 def test_eicar_con_yara(pagina):
     pagina.click("#ej-eicar")
-    texto = resultado(pagina)
-    assert "EICAR_Test_File" in texto
+    resultado(pagina)
+    assert "EICAR_Test_File" in pestana(pagina, "yara")
+    # las flechas mueven entre pestañas, y «Nuevo análisis» vuelve a la portada
+    pagina.focus("#pes-yara")
+    pagina.keyboard.press("ArrowRight")
+    assert pagina.get_attribute("#pes-yara", "aria-selected") == "false"
+    pagina.click("#btn-volver")
+    assert pagina.is_visible("#drop") and pagina.is_hidden("#btn-json")
     sin_errores(pagina)
 
 
@@ -104,7 +120,7 @@ def test_fichero_subido_remcos_y_html_que_no_se_ejecuta(pagina, tmp_path):
     pagina.set_input_files("#fichero", str(muestra))
     texto = resultado(pagina)
     assert "Remcos" in texto and "c2[.]ejemplo-malo[.]test:2404" in texto
-    assert "ejecutable de windows (pe)" in texto.lower() and ".rsrc" in texto   # los h3 van en mayusculas por CSS
+    assert ".rsrc" in pestana(pagina, "pe")
     assert pagina.locator("#resultado img").count() == 0
     with pagina.expect_download() as d:
         pagina.click("button:text('Informe HTML')")

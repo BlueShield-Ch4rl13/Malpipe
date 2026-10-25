@@ -1,0 +1,85 @@
+<!doctype html>
+<!-- box.carlosvillalbalagos.com — se publica tal cual, sin compilar (como dfir.).
+     La página, los estilos (estilo.css) y la interfaz (app.js) se editan aquí;
+     Pyodide, YARA-X y py/ los regenera `npm run box` (no editar a mano). -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MALPIPE · análisis de malware en tu navegador</title>
+<meta name="description" content="Analiza un fichero sospechoso sin ejecutarlo y sin subirlo a ningún sitio: malpipe corre entero en tu navegador. Hashes, estructura del ejecutable, YARA, configuración de familias conocidas y cruce con News CTI.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0A0E13">
+<link rel="canonical" href="https://box.carlosvillalbalagos.com/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="estilo.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<a class="saltar" href="#principal">Saltar al contenido</a>
+<header>
+  <a class="marca" href="./" aria-label="MALPIPE, inicio"><span class="logo"><span class="punto" aria-hidden="true">&#9679;</span> MALPIPE</span></a>
+  <span class="tlp" title="Lo que analizas aquí no sale de tu navegador">TLP:CLEAR</span>
+  <span class="sp"></span>
+  <button type="button" class="btn" id="btn-volver" hidden>&larr; Nuevo an&aacute;lisis</button>
+  <button type="button" class="btn" id="btn-json" hidden>Descargar JSON</button>
+  <button type="button" class="btn" id="btn-pdf" hidden>Guardar PDF</button>
+  <label class="btn primario" for="fichero">Analizar un fichero</label>
+</header>
+
+<main id="principal">
+  <section id="inicio">
+    <h1>&iquest;Es peligroso este fichero?</h1>
+    <p class="lead">Arr&aacute;stralo aqu&iacute; y <b>malpipe</b> lo analiza <b>sin ejecutarlo y sin subirlo a ning&uacute;n sitio</b>:
+    hashes, estructura del ejecutable, reglas YARA, configuraci&oacute;n de familias conocidas y cruce con la
+    inteligencia de News CTI, con un veredicto que explica cada punto.</p>
+
+    <label class="drop" id="drop" for="fichero">
+      <span class="big">Arrastra aqu&iacute; un fichero &mdash; o pulsa para elegirlo</span>
+      <span class="muted">Todo el an&aacute;lisis ocurre en tu navegador. Ning&uacute;n byte se sube a ning&uacute;n servidor.</span>
+      <input type="file" id="fichero" class="oculto">
+    </label>
+
+    <div class="opciones">
+      <label><input type="checkbox" id="usar-cti" checked> Cruzar con <a href="https://cti.carlosvillalbalagos.com/">News CTI</a> (descarga el feed p&uacute;blico, ~2&nbsp;MB) &middot; ficheros de hasta 50&nbsp;MB</label>
+    </div>
+
+    <div class="ejemplos">
+      <span class="ej-etiqueta">O explora un ejemplo:</span>
+      <button type="button" class="btn ej" id="ej-beacon"><span class="punto" aria-hidden="true">&#9679;</span> Cobalt Strike &mdash; beacon sint&eacute;tico</button>
+      <button type="button" class="btn ej" id="ej-eicar"><span class="punto" aria-hidden="true">&#9679;</span> EICAR &mdash; prueba de antivirus</button>
+    </div>
+
+    <div id="estado" class="estado" hidden>
+      <div class="barra"><span id="barra"></span></div>
+      <p id="estado-texto" class="mono"></p>
+    </div>
+    <p id="error" class="error" role="alert" hidden></p>
+
+    <div class="explica">
+      <div class="paso"><b>1 &middot; Leer</b><div>Python compilado a WebAssembly (Pyodide) ejecuta malpipe en esta pesta&ntilde;a: hashes, cabecera del ejecutable, entrop&iacute;a de sus secciones, cadenas e indicadores.</div></div>
+      <div class="paso"><b>2 &middot; Comparar</b><div>Con <span id="n-reglas">97</span> reglas YARA (YARA-X), con la configuraci&oacute;n de Cobalt Strike, Remcos y njRAT, y con los indicadores de News CTI.</div></div>
+      <div class="paso"><b>3 &middot; Decidir</b><div>Veredicto con cada punto que suma, t&eacute;cnicas MITRE ATT&amp;CK y el informe en JSON, HTML, STIX&nbsp;2.1 y MISP.</div></div>
+    </div>
+
+    <div class="nota">
+      <p><b>Privacidad:</b> no se guarda ning&uacute;n dato &mdash; ni en un servidor ni en el navegador (sin cookies ni almacenamiento local).
+      El fichero solo existe en memoria mientras lo analizas y desaparece al cerrar o recargar la p&aacute;gina. Lo &uacute;nico que se descarga
+      es el motor (Pyodide y YARA-X, servidos desde aqu&iacute;) y, si lo marcas, el feed p&uacute;blico de News CTI.</p>
+      <p><b>Nota honesta:</b> no se detona la muestra: es an&aacute;lisis est&aacute;tico. Un malware empaquetado o cifrado puede salir como
+      &laquo;sin se&ntilde;ales&raquo;, y eso no lo hace inofensivo. Si te ha llegado un fichero sospechoso al trabajo, no lo abras y
+      p&aacute;saselo a tu equipo de seguridad.</p>
+    </div>
+  </section>
+
+  <section id="resultado" hidden></section>
+</main>
+
+<footer>
+  <p>MALPIPE <span id="version">1.1</span> &middot; <a href="https://carlosvillalbalagos.com/">carlosvillalbalagos.com</a> &mdash;
+  an&aacute;lisis est&aacute;tico de malware en el navegador &middot; herramienta de apoyo: no sustituye a un antivirus ni a un analista.</p>
+  <p class="muted"><a href="https://cti.carlosvillalbalagos.com/">News CTI</a> &middot; <a href="https://dfir.carlosvillalbalagos.com/">DFIR</a> &middot;
+  <a href="https://github.com/BlueShield-Ch4rl13/Malpipe">c&oacute;digo abierto (MIT)</a></p>
+</footer>
+</body>
+</html>

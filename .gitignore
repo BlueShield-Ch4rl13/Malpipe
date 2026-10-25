@@ -14,6 +14,4 @@ build/
 dist/
 node_modules/
 
-# Portal del navegador: se construye con npm run build
-web/dist/
-.wrangler/
+# El portal (box/) SÍ se sube: se publica tal cual, sin paso de compilación
