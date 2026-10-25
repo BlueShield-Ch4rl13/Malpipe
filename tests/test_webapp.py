@@ -92,3 +92,16 @@ def test_cf_connecting_ip_solo_detras_de_cloudflare(monkeypatch):
     assert srv._client_ip(peticion("127.0.0.1")) == "198.51.100.7", "desde el túnel local, sí"
     # (una IP publica real: las de documentacion como 203.0.113.0/24 cuentan como privadas)
     assert srv._client_ip(peticion("8.8.4.4")) == "8.8.4.4", "desde fuera, nunca"
+
+
+def test_exportar_stix_y_misp():
+    r = client.post("/api/analyze", files={"file": ("m.bin", io.BytesIO(b"MZ hola 198.51.100.40"),
+                                                    "application/octet-stream")},
+                    data={"cf_turnstile_response": ""})
+    job = r.json()["job_id"]
+    stix = client.get(f"/api/result/{job}/stix")
+    assert stix.status_code == 200 and stix.json()["type"] == "bundle"
+    assert "attachment" in stix.headers["content-disposition"]
+    misp = client.get(f"/api/result/{job}/misp")
+    assert misp.status_code == 200 and "Attribute" in misp.json()["Event"]
+    assert client.get(f"/api/result/{job}/pdf").status_code == 404

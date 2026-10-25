@@ -21,12 +21,15 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.formparsers import MultiPartParser
 
+from malpipe.config import env_int
+from malpipe.export import a_misp, a_stix
+
 from .jobs import store
 
 # --- Configuración del portal (por entorno) ---
-MAX_MB = int(os.getenv("MALPIPE_MAX_UPLOAD_MB", "30"))
-RATE_MAX = int(os.getenv("MALPIPE_RATE_MAX", "5"))          # análisis...
-RATE_WINDOW = int(os.getenv("MALPIPE_RATE_WINDOW", "600"))  # ...por esta ventana (s)
+MAX_MB = env_int("MALPIPE_MAX_UPLOAD_MB", 30)
+RATE_MAX = env_int("MALPIPE_RATE_MAX", 5)          # análisis...
+RATE_WINDOW = env_int("MALPIPE_RATE_WINDOW", 600)  # ...por esta ventana (s)
 TURNSTILE_SECRET = os.getenv("TURNSTILE_SECRET", "")
 TURNSTILE_SITEKEY = os.getenv("TURNSTILE_SITEKEY", "")
 # Solo detrás de Cloudflare Tunnel: entonces la IP real llega en CF-Connecting-IP.
@@ -225,6 +228,20 @@ async def api_result(job_id: str):
         "report": job.report.to_dict() if job.report else None,
     }
     return JSONResponse(payload)
+
+
+@app.get("/api/result/{job_id}/{formato}")
+async def api_exportar(job_id: str, formato: str):
+    """El informe en STIX 2.1 o como evento MISP, para descargarlo desde el portal."""
+    job = store.get(job_id)
+    if job is None or job.report is None:
+        raise HTTPException(status_code=404, detail="Trabajo no encontrado o expirado.")
+    exportadores = {"stix": a_stix, "misp": a_misp}
+    if formato not in exportadores:
+        raise HTTPException(status_code=404, detail="Formato: stix | misp")
+    nombre = f"{job.report.static.hashes.sha256[:12]}.{formato}.json"
+    return JSONResponse(exportadores[formato](job.report),
+                        headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
 
 
 # El frontend estático se sirve en la raíz.

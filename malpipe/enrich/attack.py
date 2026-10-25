@@ -64,6 +64,11 @@ _SIGNATURE_MAP: list[tuple[str, tuple[str, str, str]]] = [
 ]
 
 
+# Nombre y táctica de las técnicas que ya conoce este módulo, para las que llegan solo como ID
+_NOMBRES: dict[str, tuple[str, str]] = {tid: (n, t) for tid, n, t in
+                                        [*_IMPORT_MAP.values(), *(v for _, v in _SIGNATURE_MAP)]}
+
+
 def map_attack(
     static: StaticResult, dynamic: DynamicResult
 ) -> list[AttackTechnique]:
@@ -80,5 +85,14 @@ def map_attack(
             if needle in low:
                 # el dinámico "gana" como fuente si ya existía por estático
                 found[tid] = AttackTechnique(tid, name, tactic, source="dynamic")
+
+    # CAPE asigna él mismo la técnica a cada firma: es mejor dato que la
+    # heurística por palabras, así que tiene la última palabra.
+    for tid in dynamic.ttps:
+        if tid in found:
+            nombre, tactica = found[tid].name, found[tid].tactic
+        else:
+            nombre, tactica = _NOMBRES.get(tid, (tid, ""))
+        found[tid] = AttackTechnique(tid, nombre, tactica, source="sandbox")
 
     return sorted(found.values(), key=lambda t: t.id)

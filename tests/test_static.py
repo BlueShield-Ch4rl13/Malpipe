@@ -40,3 +40,12 @@ def test_verdict_runs():
     score_report(report)
     assert report.verdict in {"limpio", "sospechoso", "malicioso", "desconocido"}
     assert 0 <= report.score <= 100
+
+
+def test_variables_vacias_cuentan_como_no_puestas(monkeypatch):
+    # docker compose pasa "MALPIPE_DYNAMIC_TIMEOUT=" de .env como cadena vacia
+    from malpipe.config import env, env_int
+    monkeypatch.setenv("MALPIPE_DYNAMIC_TIMEOUT", "")
+    monkeypatch.setenv("MALPIPE_SANDBOX", "")
+    assert env_int("MALPIPE_DYNAMIC_TIMEOUT", 300) == 300
+    assert env("MALPIPE_SANDBOX", "auto") == "auto"
