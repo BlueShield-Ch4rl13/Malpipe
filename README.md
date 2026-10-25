@@ -3,7 +3,7 @@
 [![CI](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/ci.yml/badge.svg)](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-3b82f6.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![Portal](https://img.shields.io/badge/portal-box.carlosvillalbalagos.com-4FD6C4)
+![Portal](https://img.shields.io/badge/portal-box.carlosvillalbalagos.com-FF9F45)
 
 **Pipeline automatizado de análisis de malware — estático + dinámico — con informe, configuración de familias, cruce con News CTI y exportación a STIX 2.1 y MISP.**
 

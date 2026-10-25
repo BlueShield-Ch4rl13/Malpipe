@@ -146,7 +146,7 @@ $("ej-beacon").addEventListener("click", () => {
 // ── resultado ───────────────────────────────────────────────────────────────
 const TEXTO = {
   malicioso: ["MALICIOSO", "#F0616D", "Hay pruebas claras de que es malware. No lo abras ni lo reenvíes."],
-  sospechoso: ["SOSPECHOSO", "#E0A34A", "Tiene rasgos habituales en el malware. Trátalo como peligroso hasta que alguien lo revise."],
+  sospechoso: ["SOSPECHOSO", "#F2C94C", "Tiene rasgos habituales en el malware. Trátalo como peligroso hasta que alguien lo revise."],
   limpio: ["SIN SEÑALES", "#4FD6C4", "No se han encontrado señales de malware."],
   desconocido: ["SIN SEÑALES", "#4FD6C4", "El análisis estático no encuentra señales de malware. No es una garantía: un fichero empaquetado o cifrado puede esconderlas."],
 };
