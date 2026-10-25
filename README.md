@@ -122,6 +122,12 @@ python tests/servidor_estatico.py  # http://127.0.0.1:8787, con las mismas cabec
 
 **Desplegarlo** (Cloudflare, `wrangler.jsonc`): *Workers y Pages → Crear → Importar un repositorio → Malpipe*, comando de compilación `npm ci && npm run build`, comando de despliegue `npx wrangler deploy`. Después, en el Worker, *Configuración → Dominios y rutas → Añadir → Dominio personalizado* `box.carlosvillalbalagos.com`. Cada push a `main` lo vuelve a publicar.
 
+Una vez publicado, las mismas pruebas de extremo a extremo contra el sitio real:
+
+```bash
+MALPIPE_PORTAL_URL=https://box.carlosvillalbalagos.com/ pytest tests/test_portal.py
+```
+
 ## Portal con servidor (tu red, con dinámico)
 
 El portal FastAPI de `webapp/` sirve el mismo motor por API y puede mandar las subidas a tu CAPE (`MALPIPE_WEB_DYNAMIC=1`). Es para tu red o para tu propia instancia, no para abrirlo a internet con tu CAPE detrás.
@@ -172,7 +178,7 @@ Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), 
 | STIX 2.1 y MISP | Validados con las librerías de referencia: `stix2.parse` en modo estricto y `pymisp.MISPEvent.load` |
 | CAPEv2 | Respuestas simuladas que siguen su API v2 (crear tarea, estados, informe), tarea fallida y CAPE caído sin tumbar el estático |
 | Portal con servidor | Subida y resultado, fichero vacío, Turnstile, corte por tamaño, `CF-Connecting-IP`, exportación STIX/MISP |
-| **Portal del navegador** | Job aparte: construye `web/dist` como Cloudflare y lo abre en **Chromium** con la CSP de producción. Analiza la configuración sintética de Cobalt Strike (veredicto, C2, cruce con un feed de prueba, descargas STIX y MISP), EICAR (YARA-X), y un PE subido con HTML en sus cadenas que tiene que verse como texto. Falla con cualquier error de consola o violación de la CSP |
+| **Portal del navegador** | Job aparte: construye `web/dist` como Cloudflare y lo abre en **Chromium** con la CSP de producción (también se ha pasado contra `wrangler dev`, el motor de Cloudflare en local, que aplica `_headers` igual que en producción). Analiza la configuración sintética de Cobalt Strike (veredicto, C2, cruce con un feed de prueba, descargas STIX y MISP), EICAR (YARA-X), y un PE subido con HTML en sus cadenas que tiene que verse como texto. Falla con cualquier error de consola o violación de la CSP |
 
 Lo que **no** está probado: el dinámico contra un CAPE o un tria.ge reales (necesitan una instancia o una clave) y los extractores con malware real. La guía de [`docs/CAPE.md`](docs/CAPE.md) termina con la comprobación contra tu CAPE.
 

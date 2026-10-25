@@ -4,10 +4,14 @@ Construye primero con `npm ci && npm run build`. Se sirve web/dist con las
 mismas cabeceras que en Cloudflare (CSP incluida) y el feed de News CTI se
 sustituye por uno de prueba. Comprueba que Pyodide y YARA-X arrancan bajo esa
 CSP, que el analisis sale igual que en la CLI y que las descargas funcionan.
+
+Contra el portal ya publicado (o contra `npx wrangler dev`):
+    MALPIPE_PORTAL_URL=https://box.carlosvillalbalagos.com/ pytest tests/test_portal.py
 """
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import muestras_sinteticas as m
@@ -15,7 +19,8 @@ import pytest
 import servidor_estatico
 
 sync_api = pytest.importorskip("playwright.sync_api")
-pytestmark = pytest.mark.skipif(not (servidor_estatico.DIST / "index.html").exists(),
+URL_EXTERNA = os.environ.get("MALPIPE_PORTAL_URL", "")
+pytestmark = pytest.mark.skipif(not URL_EXTERNA and not (servidor_estatico.DIST / "index.html").exists(),
                                 reason="falta web/dist: npm ci && npm run build")
 ESPERA = 180_000          # la primera carga descarga y compila ~18 MB de WebAssembly
 
@@ -26,6 +31,9 @@ FEED = {"generated_utc": "2026-10-25T06:00:00Z", "iocs": [
 
 @pytest.fixture(scope="module")
 def portal():
+    if URL_EXTERNA:
+        yield URL_EXTERNA.rstrip("/") + "/"
+        return
     srv, url = servidor_estatico.arrancar()
     yield url
     srv.shutdown()
