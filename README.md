@@ -110,19 +110,19 @@ Sin sandbox, el pipeline avisa y ejecuta **solo estático**.
 
 Para que **cualquiera, sin perfil técnico, compruebe un fichero** y reciba un veredicto con todo lo descubierto, **sin subirlo a ningún sitio**: el portal carga el propio paquete `malpipe` en **Pyodide** (Python en WebAssembly) y escanea con **YARA-X** (WebAssembly), las 97 reglas de `rules/`. El análisis es el mismo que el de la CLI (mismo código, mismo veredicto) salvo el dinámico, que necesitaría una clave visible para cualquiera.
 
-- No hay servidor ni paso de compilación: la página está ya hecha en [`box/`](box/) y Cloudflare la sirve tal cual, igual que dfir. Misma línea visual que dfir.carlosvillalbalagos.com, con el naranja de malpipe.
+- No hay servidor ni paso de compilación: la página está ya hecha en la **raíz del repositorio** ([`index.html`](index.html)) y Cloudflare la detecta y la sirve tal cual, igual que dfir. Misma línea visual que dfir.carlosvillalbalagos.com, con el naranja de malpipe.
 - La muestra no sale del navegador. Lo único que se descarga es el motor (servido desde el propio portal) y, si se marca, el feed público de News CTI.
 - CSP estricta: `script-src 'self' 'wasm-unsafe-eval'` (sin `unsafe-eval` ni `unsafe-inline`) y `connect-src` solo hacia el portal y el feed. Todo lo que sale de la muestra se pinta como texto, y los indicadores se muestran desactivados (`hxxp`, `[.]`).
 - Descargas del informe en HTML, JSON, STIX 2.1 y MISP.
 
 ```bash
 python tests/servidor_estatico.py  # http://127.0.0.1:8787, con las mismas cabeceras que en Cloudflare
-npm ci && npm run box              # solo si cambias malpipe/ o rules/: rehace el motor de box/ (~18 MB)
+npm ci && npm run box              # solo si cambias malpipe/ o rules/: rehace motor/ (~18 MB)
 ```
 
-La página, los estilos y la interfaz (`box/index.html`, `estilo.css`, `app.js`) se editan a mano. Pyodide, YARA-X y `box/py/` los genera `npm run box`; el CI falla si no están al día con `malpipe/` y `rules/`.
+La página, los estilos y la interfaz (`index.html`, `estilo.css`, `app.js`, `motor.js`) se editan a mano. `motor/` (Pyodide, YARA-X y el código de malpipe empaquetado) lo genera `npm run box`; el CI falla si no está al día con `malpipe/` y `rules/`.
 
-**Publicarlo** en el Worker `malpipe` de Cloudflare (`wrangler.jsonc` ya apunta a `box/`): en *Configuración → Compilación*, comando de compilación **vacío** y de despliegue `npx wrangler deploy`; en *Dominios y rutas*, el dominio personalizado `box.carlosvillalbalagos.com`. Cada push a `main` lo vuelve a publicar, y las ramas no generan URL de vista previa (`preview_urls: false`). También vale Cloudflare Pages como dfir: sin comando de compilación y directorio de salida `box`.
+**Publicarlo** en el Worker `malpipe` de Cloudflare (`wrangler.jsonc` publica la raíz): en *Configuración → Compilación*, comando de compilación **vacío** y de despliegue `npx wrangler deploy`; en *Dominios y rutas*, el dominio personalizado `box.carlosvillalbalagos.com`. Cada push a `main` lo vuelve a publicar y las ramas no generan URL de vista previa (`preview_urls: false`). [`.assetsignore`](.assetsignore) deja fuera el proyecto Python: solo se publican la página y `motor/`.
 
 Una vez publicado, las mismas pruebas de extremo a extremo contra el sitio real:
 
@@ -180,7 +180,7 @@ Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), 
 | STIX 2.1 y MISP | Validados con las librerías de referencia: `stix2.parse` en modo estricto y `pymisp.MISPEvent.load` |
 | CAPEv2 | Respuestas simuladas que siguen su API v2 (crear tarea, estados, informe), tarea fallida y CAPE caído sin tumbar el estático |
 | Portal con servidor | Subida y resultado, fichero vacío, Turnstile, corte por tamaño, `CF-Connecting-IP`, exportación STIX/MISP |
-| **Portal del navegador** | Job aparte: rehace el motor de `box/` y comprueba que sale idéntico al del repositorio; después abre `box/` en **Chromium** con la CSP de producción. Analiza la configuración sintética de Cobalt Strike (veredicto, C2, cruce con un feed de prueba, descargas JSON, STIX y MISP), EICAR (YARA-X, pestañas con teclado y vuelta a la portada), y un PE subido con HTML en sus cadenas que tiene que verse como texto. Falla con cualquier error de consola o violación de la CSP |
+| **Portal del navegador** | Job aparte: rehace `motor/` y comprueba que sale idéntico al del repositorio; después abre el portal en **Chromium** con la CSP de producción (también se ha pasado contra `wrangler dev`, el motor de Cloudflare). Analiza la configuración sintética de Cobalt Strike (veredicto, C2, cruce con un feed de prueba, descargas JSON, STIX y MISP), EICAR (YARA-X, pestañas con teclado y vuelta a la portada), y un PE subido con HTML en sus cadenas que tiene que verse como texto. Falla con cualquier error de consola o violación de la CSP |
 
 Lo que **no** está probado: el dinámico contra un CAPE o un tria.ge reales (necesitan una instancia o una clave) y los extractores con malware real. La guía de [`docs/CAPE.md`](docs/CAPE.md) termina con la comprobación contra tu CAPE.
 
@@ -210,15 +210,14 @@ malpipe/
 │   ├── navegador.py  # entrada del portal del navegador (Pyodide)
 │   ├── pipeline.py   # orquestador
 │   └── __main__.py   # CLI
-├── box/              # portal del navegador, listo para publicar (box.carlosvillalbalagos.com)
-│   ├── index.html · estilo.css · app.js · motor.js · _headers   # se editan a mano
-│   └── pyodide-* · yara-x-* · py/                                # los genera npm run box
-├── scripts/box.mjs   # regenera el motor de box/ desde malpipe/, rules/ y node_modules
+├── index.html · estilo.css · app.js · motor.js · 404.html · _headers   # portal box. (se edita a mano)
+├── motor/            # Pyodide + YARA-X + malpipe empaquetado (lo genera npm run box)
+├── scripts/box.mjs   # regenera motor/ desde malpipe/, rules/ y node_modules
 ├── webapp/           # portal con servidor (FastAPI)
 ├── rules/            # reglas YARA
 ├── docs/CAPE.md      # montar tu CAPEv2 en el laboratorio
 ├── tests/
-├── wrangler.jsonc    # el Worker "malpipe" sirve box/ tal cual
+├── wrangler.jsonc · .assetsignore   # el Worker "malpipe" publica la raíz (solo el portal)
 ├── package.json      # versiones fijadas de Pyodide y YARA-X
 ├── Dockerfile · docker-compose.yml
 └── pyproject.toml

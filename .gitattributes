@@ -1,10 +1,10 @@
-# box/ se publica tal cual. Pyodide y YARA-X son de terceros (versiones fijadas en
-# package.json) y py/ lo genera `npm run box`: no cuentan en las estadísticas de
-# lenguajes de GitHub ni se revisan línea a línea en los diffs.
-box/pyodide-*/** linguist-vendored -diff
-box/yara-x-*/** linguist-vendored -diff
-box/py/** linguist-generated -diff
-box/construccion.json linguist-generated
+# El portal (box.carlosvillalbalagos.com) se publica tal cual desde la raíz.
+# motor/ lo genera `npm run box`: Pyodide y YARA-X son de terceros (versiones
+# fijadas en package.json) y no cuentan en las estadísticas de lenguajes de
+# GitHub ni se revisan línea a línea en los diffs.
+motor/pyodide-*/** linguist-vendored -diff
+motor/yara-x-*/** linguist-vendored -diff
+motor/*.json linguist-generated -diff
 *.wasm binary
 *.whl binary
 *.zip binary

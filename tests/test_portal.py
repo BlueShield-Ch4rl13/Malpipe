@@ -1,6 +1,6 @@
 """El portal del navegador de extremo a extremo, en Chromium de verdad.
 
-Se sirve box/ (lo que se publica, ya con el motor dentro) con las mismas
+Se sirve la raiz del repositorio (lo que publica Cloudflare, motor/ incluido) con las mismas
 cabeceras que en Cloudflare (CSP incluida) y el feed de News CTI se
 sustituye por uno de prueba. Comprueba que Pyodide y YARA-X arrancan bajo esa
 CSP, que el analisis sale igual que en la CLI y que las descargas funcionan.
@@ -20,8 +20,8 @@ import servidor_estatico
 
 sync_api = pytest.importorskip("playwright.sync_api")
 URL_EXTERNA = os.environ.get("MALPIPE_PORTAL_URL", "")
-pytestmark = pytest.mark.skipif(not URL_EXTERNA and not (servidor_estatico.DIST / "index.html").exists(),
-                                reason="falta el motor en box/: npm ci && npm run box")
+pytestmark = pytest.mark.skipif(not URL_EXTERNA and not (servidor_estatico.DIST / "motor" / "construccion.json").exists(),
+                                reason="falta motor/: npm ci && npm run box")
 ESPERA = 180_000          # la primera carga descarga y compila ~18 MB de WebAssembly
 
 FEED = {"generated_utc": "2026-10-25T06:00:00Z", "iocs": [
@@ -134,7 +134,7 @@ def test_cabeceras(portal):
     with urllib.request.urlopen(portal) as r:
         csp = r.headers["Content-Security-Policy"]
     assert "'wasm-unsafe-eval'" in csp and "'unsafe-eval'" not in csp and "'unsafe-inline'" not in csp
-    with urllib.request.urlopen(portal + "construccion.json") as r:
+    with urllib.request.urlopen(portal + "motor/construccion.json") as r:
         c = json.load(r)
     with urllib.request.urlopen(portal + c["rutas"]["pyodide"].removeprefix("./") + "pyodide.asm.wasm") as r:
         assert "immutable" in r.headers["Cache-Control"]
