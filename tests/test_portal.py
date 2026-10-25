@@ -20,8 +20,8 @@ import servidor_estatico
 
 sync_api = pytest.importorskip("playwright.sync_api")
 URL_EXTERNA = os.environ.get("MALPIPE_PORTAL_URL", "")
-pytestmark = pytest.mark.skipif(not URL_EXTERNA and not (servidor_estatico.DIST / "motor" / "construccion.json").exists(),
-                                reason="falta motor/: npm ci && npm run box")
+MOTOR = servidor_estatico.DIST / "motor" / "construccion.json"
+pytestmark = pytest.mark.skipif(not URL_EXTERNA and not MOTOR.exists(), reason="falta motor/: npm ci && npm run box")
 ESPERA = 180_000          # la primera carga descarga y compila ~18 MB de WebAssembly
 
 FEED = {"generated_utc": "2026-10-25T06:00:00Z", "iocs": [
