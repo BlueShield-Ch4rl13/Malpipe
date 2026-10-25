@@ -52,8 +52,17 @@ jobs:
           node-version: "22"
           cache: npm
 
-      - name: Construir web/dist (lo mismo que hace Cloudflare)
-        run: npm ci && npm run build
+      # box/ se publica tal cual: si alguien toca malpipe/ o rules/ y no regenera
+      # el motor, el portal publicado analizaria con codigo viejo. Aqui se rehace
+      # y tiene que salir identico a lo que hay en el repositorio.
+      - name: box/ al dia con malpipe/ y rules/
+        run: |
+          npm ci && npm run box
+          if [ -n "$(git status --porcelain -- box)" ]; then
+            git status --short -- box
+            echo "::error::box/ no esta al dia: ejecuta 'npm ci && npm run box' y sube el resultado"
+            exit 1
+          fi
 
       - name: Configurar Python
         uses: actions/setup-python@v5

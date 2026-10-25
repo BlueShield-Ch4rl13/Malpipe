@@ -1,0 +1,13 @@
+{
+  "malpipe": "1.1.0",
+  "pyodide": "0.29.5",
+  "yarax": "1.21.0",
+  "pefile": "pefile-2024.8.26-py3-none-any.whl",
+  "rutas": {
+    "pyodide": "./pyodide-0.29.5/",
+    "yarax": "./yara-x-1.21.0/"
+  },
+  "codigo": "be8d33d469a5",
+  "ficheros_python": 28,
+  "ficheros_yara": 14
+}

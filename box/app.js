@@ -88,6 +88,7 @@ async function analizar(nombre, datos) {
     return;
   }
   ocupado = true;
+  if (!$("resultado").hidden) volver();   // desde «Analizar un fichero» de la cabecera, con un resultado en pantalla
   $("error").hidden = true;
   for (const b of document.querySelectorAll("#inicio button")) b.disabled = true;
   progreso("Preparando el motor (la primera vez descarga unos 20 MB)…", 3);
@@ -151,15 +152,18 @@ const TEXTO = {
   desconocido: ["SIN SEÑALES", "#4FD6C4", "El análisis estático no encuentra señales de malware. No es una garantía: un fichero empaquetado o cifrado puede esconderlas."],
 };
 
+// El mismo indicador circular que dfir: la cifra en el color del veredicto y «/ 100 riesgo» debajo
 function indicador(puntos, color) {
-  const s = svg("svg", { viewBox: "0 0 120 120", role: "img", "aria-label": `Puntuación ${puntos} de 100` });
+  const s = svg("svg", { viewBox: "0 0 120 120", role: "img", "aria-label": `Riesgo ${puntos} de 100` });
   const r = 50;
   const largo = 2 * Math.PI * r;
-  s.append(svg("circle", { cx: 60, cy: 60, r, fill: "none", stroke: "#171E28", "stroke-width": 10 }));
-  s.append(svg("circle", { cx: 60, cy: 60, r, fill: "none", stroke: color, "stroke-width": 10, "stroke-linecap": "round", "stroke-dasharray": `${(largo * puntos) / 100} ${largo}`, transform: "rotate(-90 60 60)" }));
-  const t = svg("text", { x: 60, y: 67, "text-anchor": "middle", fill: "#E6EDF3", "font-size": 28, "font-family": "ui-monospace, monospace", "font-weight": 700 });
+  s.append(svg("circle", { cx: 60, cy: 60, r, fill: "none", stroke: "#171E28", "stroke-width": 9 }));
+  s.append(svg("circle", { cx: 60, cy: 60, r, fill: "none", stroke: color, "stroke-width": 9, "stroke-linecap": "round", "stroke-dasharray": `${(largo * puntos) / 100} ${largo}`, transform: "rotate(-90 60 60)" }));
+  const t = svg("text", { x: 60, y: 62, "text-anchor": "middle", fill: color, "font-size": 30, "font-family": "ui-monospace, monospace", "font-weight": 700 });
   t.textContent = String(puntos);
-  s.append(t);
+  const sub = svg("text", { x: 60, y: 80, "text-anchor": "middle", fill: "#8B97A5", "font-size": 9.5, "font-family": "ui-monospace, monospace" });
+  sub.textContent = "/ 100 riesgo";
+  s.append(t, sub);
   return s;
 }
 
@@ -170,6 +174,43 @@ const vacio = (texto) => el("p", { clase: "vacio", texto });
 const lista = (valores, transformar = (v) => v) =>
   valores.length ? el("ul", { clase: "lista" }, valores.map((v) => el("li", { texto: transformar(v) }))) : vacio("Ninguno.");
 
+// Pestañas accesibles (flechas para moverse) y, al imprimir, todas abiertas
+function pestanas(nodo, lista_) {
+  const barra = el("div", { clase: "pestanas", role: "tablist", "aria-label": "Detalle del análisis" });
+  const paneles = [];
+  lista_.forEach(([id, titulo, n, contenido], i) => {
+    const b = el("button", { clase: "pestana", type: "button", role: "tab", id: `pes-${id}`, "aria-controls": `pan-${id}`,
+      "aria-selected": i === 0 ? "true" : "false", tabindex: i === 0 ? "0" : "-1" }, titulo,
+      n === null ? null : el("span", { clase: "n", texto: String(n) }));
+    const p = el("div", { clase: "panel", role: "tabpanel", id: `pan-${id}`, "aria-labelledby": `pes-${id}`, "data-titulo": titulo, hidden: i !== 0 }, contenido);
+    barra.append(b);
+    paneles.push(p);
+  });
+  const activar = (b) => {
+    for (const x of barra.children) {
+      const si = x === b;
+      x.setAttribute("aria-selected", si ? "true" : "false");
+      x.tabIndex = si ? 0 : -1;
+      $(x.getAttribute("aria-controls")).hidden = !si;
+    }
+  };
+  barra.addEventListener("click", (e) => { const b = e.target.closest(".pestana"); if (b) activar(b); });
+  barra.addEventListener("keydown", (e) => {
+    const todas = [...barra.children];
+    const i = todas.indexOf(document.activeElement);
+    if (i < 0 || !["ArrowRight", "ArrowLeft", "Home", "End"].includes(e.key)) return;
+    e.preventDefault();
+    const j = e.key === "Home" ? 0 : e.key === "End" ? todas.length - 1 : (i + (e.key === "ArrowRight" ? 1 : -1) + todas.length) % todas.length;
+    todas[j].focus();
+    activar(todas[j]);
+  });
+  nodo.append(barra, ...paneles);
+}
+
+function cabecera(enResultado) {
+  for (const id of ["btn-volver", "btn-json", "btn-pdf"]) $(id).hidden = !enResultado;
+}
+
 function pintar(salida, erroresYara, construccion) {
   const inf = salida.informe;
   const st = inf.static;
@@ -178,86 +219,94 @@ function pintar(salida, erroresYara, construccion) {
   nodo.replaceChildren();
   $("inicio").hidden = true;
   nodo.hidden = false;
+  cabecera(true);
   window.scrollTo({ top: 0 });
 
   const base = (st.hashes.sha256 || "muestra").slice(0, 12);
+  $("btn-json").onclick = () => descargar(`${base}.json`, JSON.stringify(inf, null, 2));
   const veredicto = el("div", { clase: "veredicto", texto: etiqueta });
   veredicto.style.color = color;
+  const familia = inf.configs.length ? inf.configs.map((c) => c.family).join(", ") : "";
   nodo.append(el("div", { clase: "heroe" },
     el("div", { clase: "indicador" }, indicador(inf.score, color), veredicto),
     el("div", {},
       el("h2", { texto: st.filename }),
       el("p", { clase: "explicacion", texto: explicacion }),
+      familia ? el("p", { clase: "vtext", texto: `Configuración de ${familia} extraída: el C2 y los parámetros están abajo.` }) : null,
       el("div", { clase: "datos" },
         [["Tipo", st.filetype], ["Tamaño", tamano(st.size)], ["SHA-256", st.hashes.sha256], ["MD5", st.hashes.md5],
          ["Analizado", `en tu navegador · malpipe ${inf.version}`]]
           .map(([k, v]) => el("div", {}, el("span", { clase: "k", texto: k }), el("span", { clase: "v", texto: v })))),
       el("div", { clase: "descargas" },
+        el("span", { clase: "k", texto: "Exportar:" }),
         el("button", { clase: "btn primario", type: "button", texto: "Informe HTML", onclick: () => descargar(`${base}.html`, salida.html, "text/html") }),
-        el("button", { clase: "btn", type: "button", texto: "JSON", onclick: () => descargar(`${base}.json`, JSON.stringify(inf, null, 2)) }),
         el("button", { clase: "btn", type: "button", texto: "STIX 2.1", onclick: () => descargar(`${base}.stix.json`, JSON.stringify(salida.stix, null, 2)) }),
         el("button", { clase: "btn", type: "button", texto: "Evento MISP", onclick: () => descargar(`${base}.misp.json`, JSON.stringify(salida.misp, null, 2)) })))));
 
-  const rejilla = el("div", { clase: "rejilla" });
-  nodo.append(rejilla);
+  // ¿Por qué? y ATT&CK, en dos columnas como en dfir
+  const porTactica = {};
+  for (const t of inf.attack) (porTactica[t.tactic || "Sin táctica"] ??= []).push(t);
+  nodo.append(el("div", { clase: "doble" },
+    tarjeta("¿Por qué? — evidencias que suman al riesgo", inf.reasons.length
+      ? el("div", {}, inf.reasons.map((r) => {
+          const m = /^([+≥]\d+) (.*)$/.exec(r);
+          return el("div", { clase: "razon" }, el("span", { clase: "que", texto: m ? m[2] : r }), el("span", { clase: "pts", texto: m ? m[1] : "" }));
+        }))
+      : vacio("Nada suma: ninguna de las señales que mira malpipe aparece en este fichero.")),
+    tarjeta(`MITRE ATT&CK — ${inf.attack.length} ${inf.attack.length === 1 ? "técnica" : "técnicas"}`, inf.attack.length
+      ? el("div", {}, Object.entries(porTactica).map(([tac, ts]) => el("div", { clase: "tactica" },
+          el("div", { clase: "nombre", texto: tac }),
+          ts.map((t) => el("a", { clase: "chip", href: `https://attack.mitre.org/techniques/${t.id.replace(".", "/")}/`,
+            target: "_blank", rel: "noopener noreferrer" }, el("b", { texto: t.id }), ` ${t.name}`)))))
+      : vacio("Ninguna técnica encaja con lo que se ve sin ejecutarlo."))));
 
-  // Por que
-  rejilla.append(tarjeta("Por qué esta puntuación", inf.reasons.length
-    ? el("div", {}, inf.reasons.map((r) => {
-        const m = /^([+≥]\d+) (.*)$/.exec(r);
-        return el("div", { clase: "razon" }, el("span", { clase: "pts", texto: m ? m[1] : "=" }), el("span", { texto: m ? m[2] : r }));
-      }))
-    : vacio("Nada suma: ninguna de las señales que mira malpipe aparece en este fichero.")));
-
-  // Familia
+  // Familia y configuración: lo más valioso, siempre a la vista
   if (inf.configs.length) {
     const familias = inf.configs.map((c) => el("div", {},
       el("p", {}, el("strong", { texto: c.family }),
         el("span", { clase: "muted", texto: ` · confianza ${c.confidence} · ${c.extractor}` })),
       el("p", { clase: "subt", texto: "Servidores de mando y control (C2)" }),
       lista(c.c2, desactivar),
+      el("p", { clase: "subt", texto: "Configuración" }),
       el("div", { clase: "tabla" }, el("table", { clase: "kv" }, Object.entries(c.values).map(([k, v]) =>
         el("tr", {}, el("th", { texto: k }),
           el("td", { clase: "mono", texto: Array.isArray(v) ? v.join(", ") : String(v) })))))));
-    rejilla.append(tarjeta("Familia y configuración", el("div", {}, familias), "alerta"));
+    nodo.append(tarjeta("Familia y configuración", el("div", {}, familias), "alerta"));
   }
 
-  // News CTI
+  // Detalle en pestañas
+  const ind = st.indicators;
+  const grupos = [["IP", ind.ips], ["Dominios", ind.domains], ["URL", ind.urls], ["Correos", ind.emails]];
+  const nInd = grupos.reduce((t, [, v]) => t + v.length, 0);
   const cti = inf.cti;
-  rejilla.append(tarjeta("News CTI", !cti.checked
+  const panelCti = !cti.checked
     ? vacio("No se ha cruzado (desmarcado o feed no disponible).")
     : el("div", {},
-        el("p", { clase: "muted", texto: `${cti.indicators.toLocaleString("es")} ${cti.indicators === 1 ? "indicador" : "indicadores"} en el feed de ${cti.generated || "?"}` }),
+        el("p", { clase: "subt", texto: `${cti.indicators.toLocaleString("es")} ${cti.indicators === 1 ? "indicador" : "indicadores"} en el feed de ${cti.generated || "?"}` }),
         cti.matches.length
           ? el("div", { clase: "tabla" }, el("table", { clase: "ancha" },
               el("tr", {}, ["Indicador", "Tipo", "Amenaza", "Nivel", "Fuentes"].map((t) => el("th", { texto: t }))),
               cti.matches.map((m) => el("tr", {}, el("td", { clase: "mono", texto: desactivar(m.matched) }), el("td", { texto: m.type }),
                 el("td", { texto: m.threat }), el("td", { texto: m.level }), el("td", { texto: m.sources.join(", ") })))))
-          : vacio("Ninguno de sus indicadores está en News CTI."))));
-
-  // ATT&CK
-  const porTactica = {};
-  for (const t of inf.attack) (porTactica[t.tactic || "Sin táctica"] ??= []).push(t);
-  rejilla.append(tarjeta("MITRE ATT&CK", inf.attack.length
-    ? el("div", {}, Object.entries(porTactica).map(([tac, ts]) => el("div", { clase: "tactica" },
-        el("div", { clase: "nombre", texto: tac }),
-        ts.map((t) => el("a", { clase: "chip", href: `https://attack.mitre.org/techniques/${t.id.replace(".", "/")}/`,
-          target: "_blank", rel: "noopener noreferrer", texto: `${t.id} ${t.name}` })))))
-    : vacio("Ninguna técnica encaja con lo que se ve sin ejecutarlo.")));
-
-  // YARA
-  rejilla.append(tarjeta("Reglas YARA", el("div", {},
+          : vacio("Ninguno de sus indicadores está en News CTI."));
+  const panelYara = el("div", {},
     st.yara.length
       ? el("div", { clase: "tabla" }, el("table", {}, st.yara.map((y) => el("tr", {},
           el("td", { clase: "mono" }, el("span", { clase: "chip peligro", texto: y.rule })),
           el("td", { texto: y.meta.description || y.meta.descripcion || "" }),
           el("td", { clase: "muted", texto: y.meta.fichero || "" })))))
       : vacio(`Ninguna de las ${construccion.reglas_yara} reglas coincide.`),
-    erroresYara.length ? el("p", { clase: "subt", texto: `Ficheros de reglas que no compilan y se han saltado: ${erroresYara.join("; ")}` }) : null)));
-
-  // Ejecutable
+    erroresYara.length ? el("p", { clase: "subt", texto: `Ficheros de reglas que no compilan y se han saltado: ${erroresYara.join("; ")}` }) : null);
+  const lista_ = [
+    ["indicadores", "Indicadores", nInd, nInd
+      ? el("div", {}, grupos.filter(([, v]) => v.length).map(([t, v]) =>
+          el("div", {}, el("p", { clase: "subt", texto: `${t} (${v.length})` }), lista(v, desactivar))))
+      : vacio("Ninguno: no hay IP, dominios, URL ni correos en sus cadenas.")],
+    ["cti", "News CTI", cti.checked ? cti.matches.length : null, panelCti],
+    ["yara", "YARA", st.yara.length, panelYara],
+  ];
   if (st.pe.is_pe) {
-    rejilla.append(tarjeta("Ejecutable de Windows (PE)", el("div", {},
+    lista_.push(["pe", "Ejecutable (PE)", null, el("div", {},
       el("div", { clase: "datos" }, [["Arquitectura", st.pe.machine], ["Subsistema", st.pe.subsystem], ["DLL", st.pe.is_dll ? "sí" : "no"],
         ["Compilado", st.pe.compile_time || "—"], ["Imphash", st.pe.imphash || "—"]]
         .map(([k, v]) => el("div", {}, el("span", { clase: "k", texto: k }), el("span", { clase: "v", texto: v })))),
@@ -271,20 +320,11 @@ function pintar(salida, erroresYara, construccion) {
             el("td", {}, el("div", { clase: `entropia ${s.entropy >= 7.2 ? "alta" : ""}` }, el("span", { clase: "b" }, barra), el("span", { clase: "mono", texto: s.entropy }))));
         }))),
       el("p", { clase: "subt", texto: "Imports que suele usar el malware" }),
-      st.pe.suspicious_imports.length ? el("div", {}, st.pe.suspicious_imports.map((i) => el("span", { clase: "chip", texto: i }))) : vacio("Ninguno."))));
+      st.pe.suspicious_imports.length ? el("div", {}, st.pe.suspicious_imports.map((i) => el("span", { clase: "chip", texto: i }))) : vacio("Ninguno."))]);
   }
+  lista_.push(["cadenas", "Cadenas", st.interesting_strings.length, lista(st.interesting_strings)]);
+  pestanas(nodo, lista_);
 
-  // Indicadores y cadenas
-  const ind = st.indicators;
-  const grupos = [["IP", ind.ips], ["Dominios", ind.domains], ["URL", ind.urls], ["Correos", ind.emails]];
-  rejilla.append(tarjeta("Indicadores en sus cadenas", grupos.some(([, v]) => v.length)
-    ? el("div", {}, grupos.filter(([, v]) => v.length).map(([t, v]) =>
-        el("div", {}, el("p", { clase: "subt", texto: `${t} (${v.length})` }), lista(v, desactivar))))
-    : vacio("Ninguno: no hay IP, dominios, URL ni correos en sus cadenas.")));
-  rejilla.append(tarjeta("Cadenas de interés", lista(st.interesting_strings)));
-
-  nodo.append(el("div", { clase: "acciones" },
-    el("button", { clase: "btn primario", type: "button", texto: "Analizar otro fichero", onclick: volver })));
   $("version").textContent = `${inf.version} · Pyodide ${construccion.pyodide} · YARA-X ${construccion.yarax}`;
 }
 
@@ -293,9 +333,12 @@ function volver() {
   $("resultado").replaceChildren();
   $("inicio").hidden = false;
   $("estado").hidden = true;
+  cabecera(false);
   for (const b of document.querySelectorAll("#inicio button")) b.disabled = false;
   window.scrollTo({ top: 0 });
 }
+$("btn-volver").addEventListener("click", volver);
+$("btn-pdf").addEventListener("click", () => window.print());
 
 // Para las pruebas de extremo a extremo
 window.__malpipe = { ultimo: () => ultimo };
