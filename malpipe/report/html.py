@@ -36,7 +36,36 @@ def _list(items: list[str]) -> str:
     return "<ul>" + "".join(f"<li><code>{_esc(i)}</code></li>" for i in items) + "</ul>"
 
 
-def to_html(report: Report, path: str) -> None:
+def _configs(report: Report) -> str:
+    if not report.configs:
+        return "<p class='muted'>Ninguna familia reconocida en la muestra.</p>"
+    bloques = []
+    for c in report.configs:
+        filas = _rows([(k, v) for k, v in c.values.items()])
+        bloques.append(
+            f"<p><strong>{_esc(c.family)}</strong> <span class='muted'>· extractor {_esc(c.extractor)} · "
+            f"confianza {_esc(c.confidence)} · {_esc(c.source)}</span></p>"
+            f"<p><strong>C2:</strong></p>{_list(c.c2)}<table>{filas}</table>")
+    return "".join(bloques)
+
+
+def _cti(report: Report) -> str:
+    cti = report.cti
+    if not cti.checked:
+        return f"<p class='muted'>No se ha cruzado. {_esc(cti.error)}</p>"
+    cab = (f"<p class='muted'>{cti.indicators} indicadores del feed de {_esc(cti.generated)} · "
+           f"<code>{_esc(cti.source)}</code></p>")
+    if not cti.matches:
+        return cab + "<p>Ningún indicador de la muestra está en News CTI.</p>"
+    filas = "".join(
+        f"<tr><td><code>{_esc(m.matched)}</code></td><td>{_esc(m.type)}</td><td>{_esc(m.threat)}</td>"
+        f"<td>{_esc(m.level)}</td><td>{_esc(', '.join(m.sources))}</td></tr>" for m in cti.matches)
+    return cab + ("<table><tr><th>Indicador</th><th>Tipo</th><th>Amenaza</th><th>Nivel</th><th>Fuentes</th></tr>"
+                  f"{filas}</table>")
+
+
+def render_html(report: Report) -> str:
+    """El informe HTML como texto (el portal del navegador lo descarga sin escribir a disco)."""
     st, dy = report.static, report.dynamic
     color = _VERDICT_COLOR.get(report.verdict, "#64748b")
 
@@ -89,6 +118,7 @@ def to_html(report: Report, path: str) -> None:
 
 <div class="verdict">{_esc(report.verdict).upper()}</div>
 <span class="score">Puntuación: {report.score}/100</span>
+<p><strong>Por qué:</strong></p>{_list(report.reasons)}
 
 <h2>Fichero</h2>
 <table>{_rows([
@@ -112,6 +142,13 @@ def to_html(report: Report, path: str) -> None:
     ("Aviso", dy.error),
 ])}</table>
 <p><strong>Firmas:</strong></p>{_chips(dy.signatures)}
+<p><strong>Red durante la detonación:</strong></p>{_list(dy.hosts + dy.domains + dy.urls)}
+
+<h2>Configuración de familia</h2>
+{_configs(report)}
+
+<h2>News CTI</h2>
+{_cti(report)}
 
 <h2>MITRE ATT&amp;CK</h2>
 <table>
@@ -143,10 +180,13 @@ def to_html(report: Report, path: str) -> None:
 {_list(st.interesting_strings)}
 
 <footer>
-  Generado por malpipe. Análisis estático local + dinámico en sandbox gestionado.
+  Generado por malpipe. Análisis estático local + dinámico en sandbox (CAPEv2 propio o tria.ge).
   Heurística orientativa: contrasta siempre con el criterio del analista.
 </footer>
 </body></html>"""
+    return doc
 
+
+def to_html(report: Report, path: str) -> None:
     with open(path, "w", encoding="utf-8") as f:
-        f.write(doc)
+        f.write(render_html(report))
