@@ -3,10 +3,13 @@
 [![CI](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/ci.yml/badge.svg)](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-3b82f6.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Portal](https://img.shields.io/badge/portal-box.carlosvillalbalagos.com-4FD6C4)
 
-**Pipeline automatizado de análisis de malware — estático + dinámico — con informe y mapeo MITRE ATT&CK.**
+**Pipeline automatizado de análisis de malware — estático + dinámico — con informe, configuración de familias, cruce con News CTI y exportación a STIX 2.1 y MISP.**
 
-`malpipe` toma una muestra, la analiza sin ejecutarla (estático) y, opcionalmente, la detona en un **sandbox gestionado** para obtener comportamiento real (dinámico). Cruza ambas fuentes, mapea la actividad a **MITRE ATT&CK** y genera un informe en **JSON** (para ingesta en SIEM / The Hive) y **HTML** (para revisión del analista).
+`malpipe` toma una muestra, la analiza sin ejecutarla (estático), opcionalmente la detona en un sandbox (tu propio **CAPEv2** o **tria.ge**), extrae la configuración de familias conocidas, cruza sus indicadores con [News CTI](https://cti.carlosvillalbalagos.com), mapea lo que ve a **MITRE ATT&CK** y da un veredicto que explica punto por punto.
+
+Se usa de tres formas: la **línea de órdenes**, el **portal del navegador** ([box.carlosvillalbalagos.com](https://box.carlosvillalbalagos.com), sin servidor: la muestra no sale del navegador) y el **portal con servidor** (FastAPI, para tu red, con dinámico).
 
 > Herramienta **defensiva** de DFIR / análisis de malware. Analiza muestras; no las crea.
 
@@ -14,23 +17,30 @@
 
 ## Arquitectura
 
-El diseño separa lo seguro de lo peligroso: el estático corre **en local**; la detonación real se delega a un **sandbox gestionado por API**, de modo que la muestra **nunca se ejecuta en tu máquina**.
-
 ```mermaid
 flowchart LR
-    A[Muestra] --> B[Análisis estático<br/>local · sin ejecución]
-    A --> C[Análisis dinámico<br/>sandbox gestionado · API]
-    B --> D[Enriquecimiento<br/>MITRE ATT&CK + veredicto]
-    C --> D
-    D --> E[Informe JSON]
-    D --> F[Informe HTML]
+    A[Muestra] --> B[Estático<br/>hashes · PE · cadenas · YARA]
+    A --> C[Configuración de familia<br/>Cobalt Strike · Remcos · njRAT]
+    A --> D[Dinámico<br/>CAPEv2 propio o tria.ge]
+    D --> C
+    B --> E[News CTI<br/>hashes, IP, dominios, C2]
+    C --> E
+    D --> E
+    B & C & D & E --> F[ATT&CK + veredicto<br/>con cada razón]
+    F --> G[JSON · HTML · STIX 2.1 · MISP]
 ```
 
-**Estático (local, seguro):** hashes (MD5/SHA1/SHA256, imphash, ssdeep opcional), parseo de cabecera PE (secciones, entropía, imports, imports sospechosos), extracción de strings e IOCs (IPs, dominios, URLs, emails) y escaneo YARA.
+**Estático (sin ejecutar):** hashes (MD5/SHA1/SHA256, imphash, ssdeep opcional), cabecera PE (secciones, entropía, imports sospechosos), cadenas e indicadores (IP, dominios, URL, correos) y YARA.
 
-**Dinámico (sandbox gestionado):** envía la muestra a [tria.ge](https://tria.ge), espera el informe y extrae puntuación, familia y firmas de comportamiento. (VirusTotal no está implementado.)
+**Configuración de familias:** lee el formato de configuración de **Cobalt Strike** (tabla TLV con XOR 0x69/0x2e) y **Remcos** (recurso `SETTINGS` cifrado con RC4), y reconoce **njRAT** por su separador y sus cadenas (confianza media). Sale el C2, el puerto, la campaña, el mutex… Sobre una muestra empaquetada no hay configuración en claro: para eso está la que CAPEv2 saca del volcado de memoria, que malpipe recoge igual.
 
-**Enriquecimiento:** mapeo heurístico a técnicas ATT&CK desde los imports (estático) y las firmas (dinámico), más una puntuación agregada 0–100 y un veredicto (`limpio` / `sospechoso` / `malicioso`).
+**Dinámico:** con **CAPEv2** la muestra se detona en tu infraestructura y la API devuelve puntuación, familia, firmas con su técnica ATT&CK, la red que vio y las configuraciones extraídas ([`docs/CAPE.md`](docs/CAPE.md)). Con **tria.ge**, puntuación, familia y firmas. VirusTotal no está implementado.
+
+**News CTI:** busca en el feed público de [ScriptNewsCTI](https://github.com/BlueShield-Ch4rl13/ScriptNewsCTI) los hashes de la muestra, las IP, dominios y URL de sus cadenas, los C2 de su configuración y la red del sandbox. Un hash en el feed es malware conocido; una IP o un dominio, infraestructura que alguien ya ha visto atacar.
+
+**Veredicto:** puntuación 0–100 con cada razón escrita (`+20 YARA: …`, `≥70 configuración de Cobalt Strike extraída`). Una familia identificada o un hash conocido fijan un mínimo, sumen lo que sumen las demás señales.
+
+**Exportación:** JSON y HTML, y además **STIX 2.1** (bundle con la muestra, el análisis, indicadores con patrón, malware, técnicas ATT&CK y relaciones; IDs deterministas, TLP:AMBER) y **evento MISP** (atributos con `to_ids` solo si es malicioso, etiquetas de la galaxia de ATT&CK).
 
 ---
 
@@ -42,7 +52,7 @@ cd Malpipe
 pip install -r requirements.txt      # núcleo: pefile + requests
 ```
 
-Opcional (mejor análisis): `pip install yara-python` para reglas YARA y `pip install ssdeep` (requiere `libfuzzy-dev`) para fuzzy hashing.
+Opcional: `pip install yara-python` para YARA y `pip install ssdeep` (requiere `libfuzzy-dev`) para fuzzy hashing.
 
 ## Uso
 
@@ -50,21 +60,32 @@ Opcional (mejor análisis): `pip install yara-python` para reglas YARA y `pip in
 # Solo estático (no necesita claves)
 python -m malpipe muestra.exe --no-dynamic
 
-# Estático + dinámico (requiere clave de sandbox, ver abajo)
-python -m malpipe muestra.exe -o reports/
+# Estático + dinámico (CAPE_URL o TRIAGE_API_KEY) + News CTI + STIX y MISP
+python -m malpipe muestra.exe -o reports/ --cti --stix --misp
 
-# Un directorio entero de muestras
-python -m malpipe ./samples/ -o reports/
+# Un directorio entero, con un feed de News CTI local
+python -m malpipe ./samples/ -o reports/ --cti-fichero iocs_latest.json
 ```
 
-Cada análisis genera `reports/<sha256>.json` y `reports/<sha256>.html`.
+Cada análisis genera `reports/<sha256>.json` y `.html`, y con `--stix` y `--misp`, `.stix.json` y `.misp.json`.
+
+```
+[*] News CTI: 2279 indicadores (2026-10-25T06:00:00Z)
+[*] Analizando: samples/beacon.bin
+    veredicto : MALICIOSO (70/100)
+    familia   : Cobalt Strike (cobaltstrike, confianza alta) C2: https://cdn.ejemplo-malo.test:443/jquery-3.3.1.min.js
+    News CTI  : 1 coincidencia(s): cdn.ejemplo-malo.test
+    informe   : reports/57cdf932789c.html
+```
+
+(La muestra es la configuración sintética de las pruebas, con un dominio `.test` inventado.)
 
 ### Con Docker (recomendado para la VM)
 
 ```bash
-cp .env.example .env          # rellena TRIAGE_API_KEY
+cp .env.example .env          # CAPE_URL/CAPE_TOKEN o TRIAGE_API_KEY
 mkdir -p samples reports
-docker compose run --rm malpipe /samples -o /reports
+docker compose run --rm malpipe /samples -o /reports --cti --stix --misp
 ```
 
 ## Configuración
@@ -73,17 +94,37 @@ Las claves se leen de variables de entorno (copia `.env.example` a `.env`, que e
 
 | Variable | Descripción |
 |---|---|
-| `TRIAGE_API_KEY` | Clave de API de tria.ge — habilita el análisis dinámico |
+| `CAPE_URL`, `CAPE_TOKEN` | Tu CAPEv2 (p. ej. `http://10.0.50.10:8000`) y su token de API — [`docs/CAPE.md`](docs/CAPE.md) |
+| `CAPE_OPCIONES` | Opciones de la tarea, p. ej. `route=none` |
+| `TRIAGE_API_KEY` | Clave de tria.ge |
+| `MALPIPE_SANDBOX` | `auto` (CAPE si hay `CAPE_URL`, si no tria.ge), `cape` o `triage` |
 | `MALPIPE_DYNAMIC_TIMEOUT` | Segundos de espera del informe del sandbox (300 por defecto) |
+| `MALPIPE_CTI_URL` | Feed de News CTI (por defecto, el `iocs_latest.json` público de ScriptNewsCTI) |
 | `MALPIPE_YARA_DIR` | Carpeta de reglas YARA (`rules/` por defecto) |
 
-Sin clave de sandbox, el pipeline avisa y ejecuta **solo estático**.
+Sin sandbox, el pipeline avisa y ejecuta **solo estático**.
 
 ---
 
-## Portal web (analiza desde el navegador)
+## Portal del navegador: box.carlosvillalbalagos.com
 
-Un frontend para que **cualquiera, sin perfil técnico, suba un fichero y reciba un veredicto** (malicioso / sospechoso / limpio) con todo lo descubierto. Sirve el mismo motor `malpipe` a través de una API.
+Para que **cualquiera, sin perfil técnico, compruebe un fichero** y reciba un veredicto con todo lo descubierto, **sin subirlo a ningún sitio**: el portal carga el propio paquete `malpipe` en **Pyodide** (Python en WebAssembly) y escanea con **YARA-X** (WebAssembly), las 97 reglas de `rules/`. El análisis es el mismo que el de la CLI (mismo código, mismo veredicto) salvo el dinámico, que necesitaría una clave visible para cualquiera.
+
+- No hay servidor: Cloudflare sirve ficheros estáticos, igual que cti. y dfir.
+- La muestra no sale del navegador. Lo único que se descarga es el motor (servido desde el propio portal) y, si se marca, el feed público de News CTI.
+- CSP estricta: `script-src 'self' 'wasm-unsafe-eval'` (sin `unsafe-eval` ni `unsafe-inline`) y `connect-src` solo hacia el portal y el feed. Todo lo que sale de la muestra se pinta como texto, y los indicadores se muestran desactivados (`hxxp`, `[.]`).
+- Descargas del informe en HTML, JSON, STIX 2.1 y MISP.
+
+```bash
+npm ci && npm run build            # web/dist: frontend + Pyodide 0.29.5 + YARA-X 1.21.0 + malpipe (~18 MB)
+python tests/servidor_estatico.py  # http://127.0.0.1:8787, con las mismas cabeceras que en Cloudflare
+```
+
+**Desplegarlo** (Cloudflare, `wrangler.jsonc`): *Workers y Pages → Crear → Importar un repositorio → Malpipe*, comando de compilación `npm ci && npm run build`, comando de despliegue `npx wrangler deploy`. Después, en el Worker, *Configuración → Dominios y rutas → Añadir → Dominio personalizado* `box.carlosvillalbalagos.com`. Cada push a `main` lo vuelve a publicar.
+
+## Portal con servidor (tu red, con dinámico)
+
+El portal FastAPI de `webapp/` sirve el mismo motor por API y puede mandar las subidas a tu CAPE (`MALPIPE_WEB_DYNAMIC=1`). Es para tu red o para tu propia instancia, no para abrirlo a internet con tu CAPE detrás.
 
 ```bash
 pip install -r requirements.txt -r requirements-web.txt
@@ -92,56 +133,58 @@ uvicorn webapp.server:app --host 127.0.0.1 --port 8000  #  ->  http://localhost:
 docker compose up web
 ```
 
-**No es estático.** A diferencia de un dashboard servido por Cloudflare Pages, el portal necesita un backend siempre encendido, porque tiene que recibir la subida, **guardar la clave del sandbox en secreto** (nunca en el navegador) y llamar al sandbox bajo demanda. La muestra se analiza **en memoria**: el tamaño se corta mientras llega (antes de que FastAPI lea el cuerpo) y el umbral de volcado a disco de Starlette está por encima del límite de subida, así que no se escribe en `/tmp`.
-
-### API
+La muestra se analiza **en memoria**: el tamaño se corta mientras llega (antes de que FastAPI lea el cuerpo) y el umbral de volcado a disco de Starlette está por encima del límite de subida, así que no se escribe en `/tmp`.
 
 | Endpoint | Descripción |
 |---|---|
 | `POST /api/analyze` | Sube un fichero → crea un trabajo, devuelve `job_id` |
 | `GET /api/result/{job_id}` | Estado + informe (el estático llega al momento; el dinámico, cuando el sandbox termina) |
+| `GET /api/result/{job_id}/stix` · `/misp` | El informe en STIX 2.1 o como evento MISP |
 | `GET /api/config` | Config pública para el frontend (sitekey de Turnstile, tamaño máximo) |
 
-### Despliegue público con Cloudflare Tunnel (recomendado)
-
-Para exponerlo **sin abrir puertos** de tu servidor y con protección delante (el `docker-compose.yml` publica el 8000 solo en `127.0.0.1`, para que no haya otra forma de entrar que el túnel):
+Para exponerlo **sin abrir puertos** (el `docker-compose.yml` publica el 8000 solo en `127.0.0.1`), Cloudflare Tunnel:
 
 ```bash
 cloudflared tunnel --url http://localhost:8000
-# y apunta un subdominio (p.ej. analiza.carlosvillalbalagos.com) al túnel
 ```
 
-Delante, Cloudflare te da TLS, WAF y rate-limiting. Enlázalo desde `cti.carlosvillalbalagos.com` con un botón.
+Guardarraíles que trae y que hay que activar:
 
-### Guardarraíles de un servicio público
+- **Nunca ejecuta en tu equipo** — la detonación ocurre en el sandbox.
+- **No persiste ficheros** — se analizan en memoria. Pero con `MALPIPE_WEB_DYNAMIC=1` **cada muestra de un tercero va a tu sandbox** (y con tria.ge gratuito, el análisis es público). Por eso viene desactivado.
+- **Rate-limit por IP** (`MALPIPE_RATE_MAX` / `MALPIPE_RATE_WINDOW`) y **límite de tamaño** (`MALPIPE_MAX_UPLOAD_MB`). La IP real (`CF-Connecting-IP`) solo se cree con `MALPIPE_BEHIND_CLOUDFLARE=1` y si la conexión llega del túnel.
+- **Anti-bots** — Cloudflare Turnstile con `TURNSTILE_SITEKEY` y `TURNSTILE_SECRET`.
+- **News CTI** — `MALPIPE_WEB_CTI=1` cruza cada análisis con el feed (descargado como mucho una vez por hora).
 
-Un endpoint público que acepta ficheros de cualquiera exige cuidado. Lo que ya trae y lo que debes activar:
-
-- **Nunca ejecuta en tu equipo** — la detonación ocurre en el sandbox gestionado.
-- **No persiste ficheros en el servidor** — se analizan en memoria y se descartan. Pero si activas el dinámico en el portal (`MALPIPE_WEB_DYNAMIC=1`), **cada muestra de un tercero se sube a tria.ge con tu cuenta**, y en el plan gratuito los análisis son públicos. Por eso viene desactivado: el portal hace solo estático salvo que lo pidas.
-- **Rate-limit por IP** integrado (`MALPIPE_RATE_MAX` / `MALPIPE_RATE_WINDOW`) y **límite de tamaño** (`MALPIPE_MAX_UPLOAD_MB`). La IP real (`CF-Connecting-IP`) solo se cree con `MALPIPE_BEHIND_CLOUDFLARE=1` y si la conexión llega del túnel; si no, cualquiera inventaba una IP por petición y el límite no limitaba.
-- **Anti-bots** — activa Cloudflare Turnstile poniendo `TURNSTILE_SITEKEY` y `TURNSTILE_SECRET` (ya lo usas en tu web). Sin esto, cualquiera puede automatizar subidas.
-- **Coste/cuota** — cada análisis dinámico consume cuota de tu API de sandbox. Con Turnstile + rate-limit lo tienes acotado; añade un tope diario si lo abres del todo.
-- **Contenido** — un formulario público de subida puede recibir contenido ilícito. Añade un aviso legal, no almacenes nada y apóyate en el manejo del propio sandbox.
-
-Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), `MALPIPE_RATE_MAX` (5), `MALPIPE_RATE_WINDOW` (600), `TURNSTILE_SITEKEY`, `TURNSTILE_SECRET`, `MALPIPE_WEB_DYNAMIC` (0), `MALPIPE_BEHIND_CLOUDFLARE` (0).
-
-### Cómo está probado
-
-`pytest` en el CI con las dependencias web y YARA instaladas (antes `test_webapp.py` se saltaba entero): subida y resultado, fichero vacío, el token de Turnstile leído del formulario, el corte por tamaño antes de llegar al análisis, que `CF-Connecting-IP` no se cree desde fuera del túnel, que una regla YARA rota no apague las demás y que todas las reglas de `rules/` compilan. El análisis dinámico contra tria.ge no se prueba en el CI (necesita una clave).
+Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), `MALPIPE_RATE_MAX` (5), `MALPIPE_RATE_WINDOW` (600), `TURNSTILE_SITEKEY`, `TURNSTILE_SECRET`, `MALPIPE_WEB_DYNAMIC` (0), `MALPIPE_WEB_CTI` (0), `MALPIPE_BEHIND_CLOUDFLARE` (0).
 
 ---
 
-## ⚠️ Seguridad y "producción"
+## Cómo está probado
 
-**Analizar malware requiere aislamiento.** Por eso el análisis dinámico se delega a un **sandbox gestionado**: la muestra se detona en su infraestructura, no en la tuya. Ejecutar `malpipe` en tu VM es seguro porque la VM **no ejecuta la muestra**.
+`pytest` en el CI, con dos jobs (`.github/workflows/ci.yml`):
 
-Reglas de la casa:
+| Qué | Cómo |
+|---|---|
+| Estático, YARA y veredicto | Hashes, IOCs, IP privadas fuera, una regla YARA rota no apaga las demás, todas las reglas compilan |
+| Configuración de familias | Muestras **sintéticas** que reproducen cada formato (`tests/muestras_sinteticas.py`): una tabla TLV de Cobalt Strike con XOR 0x2e y 0x69, un PE con el recurso `SETTINGS` de Remcos cifrado con RC4, las cadenas de njRAT. Y que con datos aleatorios o con otra clave no sale nada |
+| News CTI | Hash conocido → malicioso; `1.2.3.4` casa con `1.2.3.4:puerto`; el host de una URL casa con el dominio; el C2 de la configuración se cruza |
+| STIX 2.1 y MISP | Validados con las librerías de referencia: `stix2.parse` en modo estricto y `pymisp.MISPEvent.load` |
+| CAPEv2 | Respuestas simuladas que siguen su API v2 (crear tarea, estados, informe), tarea fallida y CAPE caído sin tumbar el estático |
+| Portal con servidor | Subida y resultado, fichero vacío, Turnstile, corte por tamaño, `CF-Connecting-IP`, exportación STIX/MISP |
+| **Portal del navegador** | Job aparte: construye `web/dist` como Cloudflare y lo abre en **Chromium** con la CSP de producción. Analiza la configuración sintética de Cobalt Strike (veredicto, C2, cruce con un feed de prueba, descargas STIX y MISP), EICAR (YARA-X), y un PE subido con HTML en sus cadenas que tiene que verse como texto. Falla con cualquier error de consola o violación de la CSP |
+
+Lo que **no** está probado: el dinámico contra un CAPE o un tria.ge reales (necesitan una instancia o una clave) y los extractores con malware real. La guía de [`docs/CAPE.md`](docs/CAPE.md) termina con la comprobación contra tu CAPE.
+
+---
+
+## ⚠️ Seguridad
+
+**Analizar malware requiere aislamiento.** El análisis estático no ejecuta la muestra; la detonación ocurre en el sandbox: tu CAPE en una VLAN sin ruta a nada ([`docs/CAPE.md`](docs/CAPE.md)) o tria.ge.
+
 - Manipula muestras **solo dentro de una VM dedicada**, con snapshot y **sin acceso a tu red de confianza**.
 - Las muestras y las salidas del sandbox **quedan fuera del repositorio** (ya están en `.gitignore`).
 - Nunca subas muestras reales a un repo público.
-
-**Evolución — detonación local con CAPEv2:** si más adelante quieres detonar en tu propia infraestructura (sin depender de un sandbox externo), el camino es un **CAPEv2** en un **host físico aislado y dedicado** (no esta misma VM): virtualización anidada, red simulada con INetSim/FakeNet y segmentación estricta. Sería un módulo nuevo en `malpipe/dynamic/` con la misma interfaz `(filename, data) -> DynamicResult`, y **no** debe compartir host con nada de valor.
 
 ---
 
@@ -151,27 +194,35 @@ Reglas de la casa:
 malpipe/
 ├── malpipe/          # motor
 │   ├── static/       # hashes, PE, strings/IOCs, YARA
-│   ├── dynamic/      # sandbox gestionado (tria.ge)
-│   ├── enrich/       # mapeo ATT&CK + veredicto
+│   ├── configs/      # configuración de Cobalt Strike, Remcos y njRAT
+│   ├── dynamic/      # CAPEv2 y tria.ge
+│   ├── enrich/       # ATT&CK, News CTI y veredicto
+│   ├── export/       # STIX 2.1 y MISP
 │   ├── report/       # informes JSON y HTML
+│   ├── navegador.py  # entrada del portal del navegador (Pyodide)
 │   ├── pipeline.py   # orquestador
 │   └── __main__.py   # CLI
-├── webapp/           # portal web
-│   ├── server.py     # API FastAPI + servido del frontend
-│   ├── jobs.py       # trabajos en segundo plano
-│   └── static/       # frontend (HTML/CSS/JS)
+├── web/              # portal del navegador
+│   ├── src/          # página, estilos, interfaz y motor (Web Worker), _headers
+│   └── construir.mjs # web/dist: frontend + Pyodide + YARA-X + malpipe
+├── webapp/           # portal con servidor (FastAPI)
 ├── rules/            # reglas YARA
+├── docs/CAPE.md      # montar tu CAPEv2 en el laboratorio
 ├── tests/
+├── wrangler.jsonc · package.json      # despliegue del portal en Cloudflare
 ├── Dockerfile · docker-compose.yml
 └── pyproject.toml
 ```
 
 ## Roadmap
 
-- [ ] Motor de detonación local CAPEv2 (host aislado)
-- [ ] Extracción de configuración de familias conocidas
-- [ ] Export de IOCs a formato STIX / MISP
-- [ ] Integración con [News CTI](https://cti.carlosvillalbalagos.com) para contrastar IOCs
+- [x] Motor de detonación local CAPEv2 (host aislado) — [`docs/CAPE.md`](docs/CAPE.md)
+- [x] Extracción de configuración de familias conocidas (Cobalt Strike, Remcos, njRAT, y las que extrae CAPE)
+- [x] Export de IOCs a formato STIX 2.1 / MISP
+- [x] Integración con [News CTI](https://cti.carlosvillalbalagos.com) para contrastar IOCs
+- [x] Portal público sin servidor — [box.carlosvillalbalagos.com](https://box.carlosvillalbalagos.com)
+- [ ] Más familias en los extractores (AsyncRAT, AgentTesla) y probarlos con muestras reales del laboratorio
+- [ ] Enviar a ResponseLab el veredicto de una muestra de un incidente (`/v1/<cliente>/evidencias/malpipe`) desde la CLI
 
 ## Licencia
 
