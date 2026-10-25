@@ -12,3 +12,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+node_modules/
+
+# Portal del navegador: se construye con npm run build
+web/dist/
