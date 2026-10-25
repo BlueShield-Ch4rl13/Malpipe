@@ -82,9 +82,10 @@ h1 { font-size: 28px; margin: 0 0 8px; text-wrap: balance; }
 .datos .v { font-family: var(--mono); overflow-wrap: anywhere; }
 .descargas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 
-.rejilla { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; align-items: start; }
-@media (max-width: 900px) { .rejilla { grid-template-columns: 1fr; } }
-.tarjeta { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; min-width: 0; }
+/* Dos columnas que se rellenan de arriba abajo: las tarjetas cortas no dejan huecos */
+.rejilla { columns: 2 380px; column-gap: 16px; margin-bottom: 16px; }
+.tarjeta { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; min-width: 0;
+  break-inside: avoid; display: inline-block; width: 100%; margin: 0 0 16px; }
 .tarjeta.ancha { grid-column: 1 / -1; }
 .tarjeta h3 { margin: 0 0 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
 .tarjeta.alerta { border-left: 3px solid var(--red); }
