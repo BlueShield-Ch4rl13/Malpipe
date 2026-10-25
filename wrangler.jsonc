@@ -1,0 +1,18 @@
+// box.carlosvillalbalagos.com en Cloudflare Workers (el Worker "malpipe").
+// Solo sirve ficheros: publica box/ tal cual, sin compilar y sin codigo de
+// servidor. _headers (CSP y cache) y 404.html se aplican igual que en Pages.
+//
+// En el Worker, Configuracion > Compilacion:
+//   Comando de compilacion:  (vacio: box/ ya esta hecho)
+//   Comando de despliegue:   npx wrangler deploy
+// Despues, Configuracion > Dominios y rutas > box.carlosvillalbalagos.com
+{
+  "name": "malpipe",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./box",
+    "not_found_handling": "404-page"
+  },
+  // Sin URL de vista previa por cada rama o PR: solo existe lo publicado
+  "preview_urls": false
+}
