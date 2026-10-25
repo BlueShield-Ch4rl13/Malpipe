@@ -1,4 +1,4 @@
-# Cabeceras de box.carlosvillalbalagos.com (Cloudflare Pages sirve box/ tal cual, como dfir.)
+# Cabeceras de box.carlosvillalbalagos.com. Cloudflare (Worker o Pages) sirve box/ tal cual y las aplica.
 #
 # 'wasm-unsafe-eval' es lo minimo que necesitan Pyodide y YARA-X para compilar
 # su WebAssembly; no habilita eval() de JavaScript. connect-src solo deja hablar
