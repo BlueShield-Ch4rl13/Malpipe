@@ -13,7 +13,7 @@ function progreso(texto, pct) {
 }
 
 async function preparar() {
-  const c = await (await fetch("./construccion.json")).json();
+  const c = await (await fetch("./motor/construccion.json")).json();
   progreso(`Cargando Python (Pyodide ${c.pyodide})…`, 8);
   const base = (ruta) => new URL(ruta, self.location.href).href;
   const { loadPyodide } = await import(base(c.rutas.pyodide + "pyodide.mjs"));
@@ -21,9 +21,9 @@ async function preparar() {
 
   progreso("Cargando malpipe…", 50);
   const [codigo, rueda, fuentesYara] = await Promise.all([
-    fetch("./py/malpipe.json").then((r) => r.json()),
-    fetch("./py/" + c.pefile).then((r) => r.arrayBuffer()),
-    fetch("./py/reglas.json").then((r) => r.json()),
+    fetch("./motor/malpipe.json").then((r) => r.json()),
+    fetch("./motor/" + c.pefile).then((r) => r.arrayBuffer()),
+    fetch("./motor/reglas.json").then((r) => r.json()),
   ]);
   const sitio = py.runPython("import site; site.getsitepackages()[0]");
   py.unpackArchive(rueda, "wheel", { extractDir: sitio });

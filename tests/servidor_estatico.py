@@ -1,4 +1,4 @@
-"""Servidor de box/ con las cabeceras de _headers, como las aplica Cloudflare Pages.
+"""Servidor del portal (la raiz del repositorio) con las cabeceras de _headers, como Cloudflare.
 
 Lo usan las pruebas del portal; tambien sirve para verlo en local:
     python tests/servidor_estatico.py      ->  http://127.0.0.1:8787
@@ -12,7 +12,7 @@ import sys
 import threading
 from pathlib import Path
 
-DIST = Path(__file__).resolve().parent.parent / "box"
+DIST = Path(__file__).resolve().parent.parent
 TIPOS = {".mjs": "text/javascript", ".js": "text/javascript", ".wasm": "application/wasm",
          ".whl": "application/octet-stream", ".json": "application/json", ".svg": "image/svg+xml"}
 

@@ -1,0 +1,33 @@
+# Lo que el Worker NO publica: el portal es solo index.html, 404.html, estilo.css,
+# app.js, motor.js, favicon.svg, _headers y motor/. El resto es el proyecto Python
+# (público en GitHub de todas formas, pero no pinta nada en box.).
+.git
+.github
+.wrangler
+.env*
+.dockerignore
+.gitignore
+.gitattributes
+.pytest_cache
+.ruff_cache
+node_modules
+__pycache__
+*.egg-info
+malpipe
+webapp
+tests
+docs
+rules
+scripts
+samples
+reports
+*.md
+*.toml
+*.txt
+*.yml
+*.yaml
+package.json
+package-lock.json
+wrangler.jsonc
+Dockerfile
+LICENSE

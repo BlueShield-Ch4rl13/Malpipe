@@ -16,7 +16,16 @@ __pycache__/
 *.egg-info/
 build/
 dist/
-# El portal estático (box/, ~18 MB de WebAssembly) y Node no hacen falta en la imagen
-box/
+# El portal estático (~18 MB de WebAssembly) y Node no hacen falta en la imagen
+motor/
+index.html
+404.html
+estilo.css
+app.js
+motor.js
+favicon.svg
+_headers
+.assetsignore
+wrangler.jsonc
 node_modules/
 scripts/

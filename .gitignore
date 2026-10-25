@@ -14,4 +14,4 @@ build/
 dist/
 node_modules/
 
-# El portal (box/) SÍ se sube: se publica tal cual, sin paso de compilación
+# El portal (index.html, app.js, motor.js, motor/...) SÍ se sube: Cloudflare lo publica tal cual
