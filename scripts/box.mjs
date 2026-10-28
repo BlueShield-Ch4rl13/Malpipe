@@ -64,9 +64,12 @@ async function pefile(destino) {
 fs.rmSync(DIST, { recursive: true, force: true });
 fs.mkdirSync(DIST, { recursive: true });
 
-// 2. Pyodide (solo el nucleo: no se cargan paquetes de su repositorio)
+// 2. Pyodide (solo el nucleo: no se cargan paquetes de su repositorio).
+// Desde la 314 el cargador del wasm es pyodide.asm.mjs; hasta la 0.29, pyodide.asm.js.
 const dirPy = `pyodide-${PYODIDE}`;
-for (const f of ["pyodide.mjs", "pyodide.asm.js", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json"]) {
+const asm = ["pyodide.asm.mjs", "pyodide.asm.js"].find((f) => fs.existsSync(path.join(RAIZ, "node_modules", "pyodide", f)));
+if (!asm) throw new Error(`pyodide ${PYODIDE}: no trae pyodide.asm.mjs ni pyodide.asm.js`);
+for (const f of ["pyodide.mjs", asm, "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json"]) {
   copiar(path.join(RAIZ, "node_modules", "pyodide", f), path.join(DIST, dirPy, f));
 }
 
