@@ -1,6 +1,7 @@
 # malpipe
 
 [![CI](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/ci.yml/badge.svg)](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/codeql.yml/badge.svg)](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-3b82f6.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Portal](https://img.shields.io/badge/portal-box.carlosvillalbalagos.com-FF9F45)
@@ -181,6 +182,8 @@ Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), 
 | CAPEv2 | Respuestas simuladas que siguen su API v2 (crear tarea, estados, informe), tarea fallida y CAPE caído sin tumbar el estático |
 | Portal con servidor | Subida y resultado, fichero vacío, Turnstile, corte por tamaño, `CF-Connecting-IP`, exportación STIX/MISP |
 | **Portal del navegador** | Job aparte: rehace `motor/` y comprueba que sale idéntico al del repositorio; después abre el portal en **Chromium** con la CSP de producción (también se ha pasado contra `wrangler dev`, el motor de Cloudflare). Analiza la configuración sintética de Cobalt Strike (veredicto, C2, cruce con un feed de prueba, descargas JSON, STIX y MISP), EICAR (YARA-X, pestañas con teclado y vuelta a la portada), y un PE subido con HTML en sus cadenas que tiene que verse como texto. Falla con cualquier error de consola o violación de la CSP |
+
+Además, **CodeQL** (`.github/workflows/codeql.yml`) analiza el Python, el JavaScript del portal y los workflows en cada PR y una vez por semana; `motor/` (Pyodide y YARA-X empaquetados) queda fuera porque no es código propio.
 
 Lo que **no** está probado: el dinámico contra un CAPE o un tria.ge reales (necesitan una instancia o una clave) y los extractores con malware real. La guía de [`docs/CAPE.md`](docs/CAPE.md) termina con la comprobación contra tu CAPE.
 
