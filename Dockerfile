@@ -2,7 +2,7 @@
 # El análisis dinámico se delega a un sandbox gestionado (tria.ge) vía API,
 # así que este contenedor NO detona muestras: solo hace estático y orquesta.
 
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 # libmagic/libfuzzy opcionales; se instalan solo si activas ssdeep.
 # RUN apt-get update && apt-get install -y --no-install-recommends libfuzzy2 \
