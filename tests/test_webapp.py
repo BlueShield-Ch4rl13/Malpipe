@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 
+import httpx
 import pytest
 
 pytest.importorskip("fastapi")
@@ -92,6 +93,65 @@ def test_cf_connecting_ip_solo_detras_de_cloudflare(monkeypatch):
     assert srv._client_ip(peticion("127.0.0.1")) == "198.51.100.7", "desde el túnel local, sí"
     # (una IP publica real: las de documentacion como 203.0.113.0/24 cuentan como privadas)
     assert srv._client_ip(peticion("8.8.4.4")) == "8.8.4.4", "desde fuera, nunca"
+
+
+def test_publicado_sin_turnstile_no_arranca():
+    import webapp.server as srv
+
+    with pytest.raises(RuntimeError, match="TURNSTILE_SECRET"):
+        srv._comprobar_configuracion(True, "", False)
+    srv._comprobar_configuracion(True, "secreto", False)
+    srv._comprobar_configuracion(True, "", True)   # pedido a proposito
+    srv._comprobar_configuracion(False, "", False)  # desarrollo local
+
+
+@pytest.mark.parametrize("respuesta", [
+    pytest.param(lambda r: httpx.Response(500, text="caido"), id="500"),
+    pytest.param(lambda r: httpx.Response(200, text="<html>no es json</html>"), id="no-json"),
+    pytest.param(lambda r: httpx.Response(200, json=["lista"]), id="json-raro"),
+    pytest.param(lambda r: (_ for _ in ()).throw(httpx.ConnectTimeout("sin red")), id="timeout"),
+])
+def test_siteverify_que_falla_da_503_y_no_deja_pasar(monkeypatch, respuesta):
+    import webapp.server as srv
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(srv, "TURNSTILE_SECRET", "secreto")
+    monkeypatch.setattr(srv.httpx, "AsyncClient",
+                        lambda **k: real(transport=httpx.MockTransport(respuesta), **k))
+    llamado = []
+    monkeypatch.setattr(srv.store, "create", lambda *a: llamado.append(a))
+    files = {"file": ("m.bin", io.BytesIO(b"MZ" + b"\x00" * 60), "application/octet-stream")}
+    r = client.post("/api/analyze", files=files, data={"cf_turnstile_response": "token"})
+    assert r.status_code == 503, r.text
+    assert llamado == []
+
+
+def test_siteverify_solo_acepta_success_true(monkeypatch):
+    import webapp.server as srv
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(srv, "TURNSTILE_SECRET", "secreto")
+    monkeypatch.setattr(srv.httpx, "AsyncClient", lambda **k: real(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"success": "false"})), **k))
+    files = {"file": ("m.bin", io.BytesIO(b"MZ" + b"\x00" * 60), "application/octet-stream")}
+    assert client.post("/api/analyze", files=files, data={"cf_turnstile_response": "t"}).status_code == 403
+
+
+def test_el_rate_limit_no_guarda_ips_para_siempre(monkeypatch):
+    import webapp.server as srv
+
+    monkeypatch.setattr(srv, "_hits", {})
+    monkeypatch.setattr(srv, "_MAX_IPS", 100)
+    reloj = [1000.0]
+    monkeypatch.setattr(srv.time, "time", lambda: reloj[0])
+    for i in range(150):
+        assert srv._rate_ok(f"10.0.{i // 250}.{i % 250}")
+    reloj[0] += srv.RATE_WINDOW + 1
+    assert srv._rate_ok("10.9.9.9")
+    assert len(srv._hits) == 1, "las IPs sin nada en la ventana se han tirado"
+    for _ in range(srv.RATE_MAX - 1):
+        assert srv._rate_ok("10.9.9.9")
+    assert not srv._rate_ok("10.9.9.9")
 
 
 def test_exportar_stix_y_misp():

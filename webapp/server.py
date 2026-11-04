@@ -12,7 +12,6 @@ from __future__ import annotations
 import ipaddress
 import os
 import time
-from collections import defaultdict
 
 import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -34,6 +33,23 @@ TURNSTILE_SECRET = os.getenv("TURNSTILE_SECRET", "")
 TURNSTILE_SITEKEY = os.getenv("TURNSTILE_SITEKEY", "")
 # Solo detrás de Cloudflare Tunnel: entonces la IP real llega en CF-Connecting-IP.
 BEHIND_CLOUDFLARE = os.getenv("MALPIPE_BEHIND_CLOUDFLARE", "0") == "1"
+# Publicar sin Turnstile hay que pedirlo a propósito (ver _comprobar_configuracion)
+SIN_TURNSTILE = os.getenv("MALPIPE_SIN_TURNSTILE", "0") == "1"
+
+
+def _comprobar_configuracion(detras_de_cloudflare: bool, secreto: str, sin_turnstile: bool) -> None:
+    """Publicado (detrás del túnel) y sin TURNSTILE_SECRET, el anti-bots se
+    apagaba en silencio y cualquiera podía lanzar análisis en bucle: ahora el
+    portal no arranca. Sin túnel (desarrollo en 127.0.0.1) sigue sin pedirlo, y
+    MALPIPE_SIN_TURNSTILE=1 lo permite si de verdad se quiere."""
+    if detras_de_cloudflare and not secreto and not sin_turnstile:
+        raise RuntimeError(
+            "MALPIPE_BEHIND_CLOUDFLARE=1 sin TURNSTILE_SECRET: el portal quedaría publicado sin anti-bots. "
+            "Pon TURNSTILE_SITEKEY y TURNSTILE_SECRET en .env, o MALPIPE_SIN_TURNSTILE=1 si lo quieres así."
+        )
+
+
+_comprobar_configuracion(BEHIND_CLOUDFLARE, TURNSTILE_SECRET, SIN_TURNSTILE)
 
 # Starlette guarda en memoria hasta spool_max_size y el resto lo vuelca a un
 # fichero temporal en /tmp. Con el umbral igual al límite de subida, una
@@ -96,7 +112,10 @@ class _CuerpoDemasiadoGrande(Exception):
 app.add_middleware(LimiteCuerpo, max_bytes=MAX_MB * 1024 * 1024 + 64 * 1024)
 
 # --- Rate limiting sencillo en memoria (Cloudflare hace el trabajo pesado) ---
-_hits: dict[str, list[float]] = defaultdict(list)
+_hits: dict[str, list[float]] = {}
+# Por encima de tantas IPs se tiran las que ya no tienen nada en la ventana: si no,
+# el diccionario crecía con cada IP nueva y no se vaciaba nunca.
+_MAX_IPS = 10_000
 
 
 def _client_ip(request: Request) -> str:
@@ -121,10 +140,15 @@ def _client_ip(request: Request) -> str:
 
 def _rate_ok(ip: str) -> bool:
     now = time.time()
-    _hits[ip] = [t for t in _hits[ip] if now - t < RATE_WINDOW]
-    if len(_hits[ip]) >= RATE_MAX:
+    if len(_hits) > _MAX_IPS:
+        for viejo in [k for k, v in _hits.items() if not v or now - v[-1] >= RATE_WINDOW]:
+            del _hits[viejo]
+    recientes = [t for t in _hits.get(ip, ()) if now - t < RATE_WINDOW]
+    if len(recientes) >= RATE_MAX:
+        _hits[ip] = recientes
         return False
-    _hits[ip].append(now)
+    recientes.append(now)
+    _hits[ip] = recientes
     return True
 
 
@@ -133,12 +157,19 @@ async def _turnstile_ok(token: str, ip: str) -> bool:
         return True  # verificación desactivada (desarrollo local)
     if not token:
         return False
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.post(
-            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-            data={"secret": TURNSTILE_SECRET, "response": token, "remoteip": ip},
-        )
-    return bool(r.json().get("success"))
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                data={"secret": TURNSTILE_SECRET, "response": token, "remoteip": ip},
+            )
+            r.raise_for_status()
+            return r.json().get("success") is True
+    except (httpx.HTTPError, ValueError, AttributeError):
+        # Antes salía un 500 sin capturar. Ahora un 503 claro, y nunca se deja pasar.
+        raise HTTPException(
+            status_code=503, detail="No se pudo verificar el anti-bots. Prueba en un minuto."
+        ) from None
 
 
 @app.middleware("http")

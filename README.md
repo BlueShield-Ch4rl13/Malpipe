@@ -162,10 +162,11 @@ Guardarraíles que trae y que hay que activar:
 - **Nunca ejecuta en tu equipo** — la detonación ocurre en el sandbox.
 - **No persiste ficheros** — se analizan en memoria. Pero con `MALPIPE_WEB_DYNAMIC=1` **cada muestra de un tercero va a tu sandbox** (y con tria.ge gratuito, el análisis es público). Por eso viene desactivado.
 - **Rate-limit por IP** (`MALPIPE_RATE_MAX` / `MALPIPE_RATE_WINDOW`) y **límite de tamaño** (`MALPIPE_MAX_UPLOAD_MB`). La IP real (`CF-Connecting-IP`) solo se cree con `MALPIPE_BEHIND_CLOUDFLARE=1` y si la conexión llega del túnel.
-- **Anti-bots** — Cloudflare Turnstile con `TURNSTILE_SITEKEY` y `TURNSTILE_SECRET`.
+- **Anti-bots** — Cloudflare Turnstile con `TURNSTILE_SITEKEY` y `TURNSTILE_SECRET`. Con `MALPIPE_BEHIND_CLOUDFLARE=1` y sin secreto, el portal **no arranca** (antes se publicaba sin anti-bots sin avisar); `MALPIPE_SIN_TURNSTILE=1` lo permite a propósito. Si Cloudflare no contesta, la subida da `503`, nunca pasa sin verificar.
+- **Sin cuelgues con muestras preparadas** — la extracción de dominios y correos es lineal: 1 MB de `a.a.a.a…` se analiza en menos de un segundo (con la expresión anterior, 40 KB tardaban 51 s).
 - **News CTI** — `MALPIPE_WEB_CTI=1` cruza cada análisis con el feed (descargado como mucho una vez por hora).
 
-Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), `MALPIPE_RATE_MAX` (5), `MALPIPE_RATE_WINDOW` (600), `TURNSTILE_SITEKEY`, `TURNSTILE_SECRET`, `MALPIPE_WEB_DYNAMIC` (0), `MALPIPE_WEB_CTI` (0), `MALPIPE_BEHIND_CLOUDFLARE` (0).
+Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), `MALPIPE_RATE_MAX` (5), `MALPIPE_RATE_WINDOW` (600), `TURNSTILE_SITEKEY`, `TURNSTILE_SECRET`, `MALPIPE_WEB_DYNAMIC` (0), `MALPIPE_WEB_CTI` (0), `MALPIPE_BEHIND_CLOUDFLARE` (0), `MALPIPE_SIN_TURNSTILE` (0).
 
 ---
 
