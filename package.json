@@ -10,7 +10,7 @@
     "servir": "python3 tests/servidor_estatico.py"
   },
   "dependencies": {
-    "@virustotal/yara-x": "1.22.0",
+    "@virustotal/yara-x": "1.22.1",
     "pyodide": "314.0.7"
   },
   "engines": {
