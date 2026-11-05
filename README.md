@@ -1,6 +1,7 @@
 # malpipe
 
 [![CI](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/ci.yml/badge.svg)](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/codeql.yml/badge.svg)](https://github.com/BlueShield-Ch4rl13/Malpipe/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-3b82f6.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Portal](https://img.shields.io/badge/portal-box.carlosvillalbalagos.com-FF9F45)
@@ -161,10 +162,11 @@ Guardarraíles que trae y que hay que activar:
 - **Nunca ejecuta en tu equipo** — la detonación ocurre en el sandbox.
 - **No persiste ficheros** — se analizan en memoria. Pero con `MALPIPE_WEB_DYNAMIC=1` **cada muestra de un tercero va a tu sandbox** (y con tria.ge gratuito, el análisis es público). Por eso viene desactivado.
 - **Rate-limit por IP** (`MALPIPE_RATE_MAX` / `MALPIPE_RATE_WINDOW`) y **límite de tamaño** (`MALPIPE_MAX_UPLOAD_MB`). La IP real (`CF-Connecting-IP`) solo se cree con `MALPIPE_BEHIND_CLOUDFLARE=1` y si la conexión llega del túnel.
-- **Anti-bots** — Cloudflare Turnstile con `TURNSTILE_SITEKEY` y `TURNSTILE_SECRET`.
+- **Anti-bots** — Cloudflare Turnstile con `TURNSTILE_SITEKEY` y `TURNSTILE_SECRET`. Con `MALPIPE_BEHIND_CLOUDFLARE=1` y sin secreto, el portal **no arranca** (antes se publicaba sin anti-bots sin avisar); `MALPIPE_SIN_TURNSTILE=1` lo permite a propósito. Si Cloudflare no contesta, la subida da `503`, nunca pasa sin verificar.
+- **Sin cuelgues con muestras preparadas** — la extracción de dominios y correos es lineal: 1 MB de `a.a.a.a…` se analiza en menos de un segundo (con la expresión anterior, 40 KB tardaban 51 s).
 - **News CTI** — `MALPIPE_WEB_CTI=1` cruza cada análisis con el feed (descargado como mucho una vez por hora).
 
-Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), `MALPIPE_RATE_MAX` (5), `MALPIPE_RATE_WINDOW` (600), `TURNSTILE_SITEKEY`, `TURNSTILE_SECRET`, `MALPIPE_WEB_DYNAMIC` (0), `MALPIPE_WEB_CTI` (0), `MALPIPE_BEHIND_CLOUDFLARE` (0).
+Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), `MALPIPE_RATE_MAX` (5), `MALPIPE_RATE_WINDOW` (600), `TURNSTILE_SITEKEY`, `TURNSTILE_SECRET`, `MALPIPE_WEB_DYNAMIC` (0), `MALPIPE_WEB_CTI` (0), `MALPIPE_BEHIND_CLOUDFLARE` (0), `MALPIPE_SIN_TURNSTILE` (0).
 
 ---
 
@@ -181,6 +183,8 @@ Variables (todas opcionales, ver `.env.example`): `MALPIPE_MAX_UPLOAD_MB` (30), 
 | CAPEv2 | Respuestas simuladas que siguen su API v2 (crear tarea, estados, informe), tarea fallida y CAPE caído sin tumbar el estático |
 | Portal con servidor | Subida y resultado, fichero vacío, Turnstile, corte por tamaño, `CF-Connecting-IP`, exportación STIX/MISP |
 | **Portal del navegador** | Job aparte: rehace `motor/` y comprueba que sale idéntico al del repositorio; después abre el portal en **Chromium** con la CSP de producción (también se ha pasado contra `wrangler dev`, el motor de Cloudflare). Analiza la configuración sintética de Cobalt Strike (veredicto, C2, cruce con un feed de prueba, descargas JSON, STIX y MISP), EICAR (YARA-X, pestañas con teclado y vuelta a la portada), y un PE subido con HTML en sus cadenas que tiene que verse como texto. Falla con cualquier error de consola o violación de la CSP |
+
+Además, **CodeQL** (`.github/workflows/codeql.yml`) analiza el Python, el JavaScript del portal y los workflows en cada PR y una vez por semana; `motor/` (Pyodide y YARA-X empaquetados) queda fuera porque no es código propio.
 
 Lo que **no** está probado: el dinámico contra un CAPE o un tria.ge reales (necesitan una instancia o una clave) y los extractores con malware real. La guía de [`docs/CAPE.md`](docs/CAPE.md) termina con la comprobación contra tu CAPE.
 

@@ -7,7 +7,7 @@
     "pyodide": "./motor/pyodide-314.0.7/",
     "yarax": "./motor/yara-x-1.22.0/"
   },
-  "codigo": "be8d33d469a5",
+  "codigo": "d748c3d01ffe",
   "ficheros_python": 28,
   "ficheros_yara": 14
 }

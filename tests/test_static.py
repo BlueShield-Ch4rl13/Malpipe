@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import hashlib
+import time
+
+import pytest
 
 from malpipe.enrich.attack import map_attack
 from malpipe.enrich.verdict import score_report
@@ -24,6 +27,26 @@ def test_ioc_extraction():
     assert "45.66.77.88" in ind.ips
     assert any("evil.top" in u for u in ind.urls)
     assert "admin@evil.top" in ind.emails
+
+
+def test_dominios_y_correos_como_antes():
+    data = (b"www.evil.com.br a.com-x.com evil.com-x -guion.ru foo_pegado.com evil.community "
+            b"MIXED.Case.Online c2.badguy.xyz:443 Admin.Malo@Mail.Evil.RU user+tag@sub.dom.io "
+            b"cdn.microsoft.com " + b"a" * 70 + b".largo.net")
+    ind, _ = analyze_strings(data)
+    assert ind.domains == sorted(["www.evil.com", "a.com-x.com", "evil.com", "guion.ru", "mixed.case.online",
+                                  "c2.badguy.xyz", "mail.evil.ru", "sub.dom.io", "largo.net",
+                                  "cdn.microsoft.com"])
+    assert ind.emails == ["Admin.Malo@Mail.Evil.RU", "user+tag@sub.dom.io"]
+
+
+@pytest.mark.parametrize("patron", [b"a.", b"a@", b"a-", b"a.a-", b"-a.", b"a@a.", b"a" * 63 + b"."])
+def test_las_expresiones_no_se_cuelgan(patron):
+    """ReDoS: con la expresion de antes, 40 KB de "a.a.a..." tardaban ~51 s."""
+    data = patron * (200_000 // len(patron))
+    inicio = time.perf_counter()
+    analyze_strings(data)
+    assert time.perf_counter() - inicio < 2.0
 
 
 def test_private_ip_filtered():

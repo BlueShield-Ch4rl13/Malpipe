@@ -12,8 +12,9 @@ WORKDIR /app
 # .dockerignore deja fuera .env (claves), samples/ (malware) y reports/
 COPY . /app
 
-# full = yara-python: sin él, la imagen no ejecutaba ninguna regla YARA
-RUN pip install --no-cache-dir ".[web,full]"
+# full = yara-python: sin él, la imagen no ejecutaba ninguna regla YARA.
+# -c fija cada dependencia a la versión exacta de requirements-imagen.txt.
+RUN pip install --no-cache-dir -c requirements-imagen.txt ".[web,full]"
 
 # Usuario sin privilegios
 RUN useradd -m analyst
